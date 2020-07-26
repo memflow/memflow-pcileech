@@ -6,7 +6,6 @@ More information about pcileech can be found under https://github.com/ufrisk/pci
 
 
 ## Compilation
-#
 
 This project uses libusb to interface with the ftdi chip over usb. Make sure you have the appropiate headers installed. More information about the libusb implementation can be found in the https://github.com/a1ien/rusb project.
 
@@ -30,7 +29,6 @@ To compile a dynamic library as a plugin use the following command:
 ```cargo build --release --all-features```
 
 ## License
-#
 
 Licensed under MIT License, see [LICENSE](LICENSE).
 
