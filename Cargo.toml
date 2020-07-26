@@ -12,7 +12,7 @@ readme = "README.md"
 crate-type = ["lib", "cdylib"]
 
 [dependencies]
-memflow-core = { path = "../memflow/memflow-core" }
+memflow-core = { path = "../memflow/memflow-core", features = ["plugins"] }
 memflow-derive = { path = "../memflow/memflow-derive" }
 log = { version = "0.4.8", default-features = false }
 rusb = "0.6.0"
