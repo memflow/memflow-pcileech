@@ -1,7 +1,7 @@
 use crate::ft60x::*;
 
-use std::mem::MaybeUninit;
-use std::time::Duration;
+use core::mem::MaybeUninit;
+use core::time::Duration;
 
 use log::{info, trace, warn};
 
@@ -40,6 +40,7 @@ bitfield! {
     pl_downstream_deemph_source, _: 8;
     //_, _: 16, 9;
 }
+const _: [(); core::mem::size_of::<PhyConfigWr>()] = [(); 2];
 
 bitfield! {
     pub struct PhyConfigRd(u32);
@@ -59,6 +60,7 @@ bitfield! {
     pl_received_hot_rst, _: 24;
     //_, _: 31, 25;
 }
+const _: [(); core::mem::size_of::<PhyConfigRd>()] = [(); 4];
 
 pub struct Device {
     ft60: FT60x,
@@ -320,7 +322,7 @@ impl Device {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::mem::size_of;
+    use core::mem::size_of;
 
     #[test]
     fn test_struct_sizes() {

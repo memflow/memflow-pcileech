@@ -68,6 +68,7 @@ pub struct Config {
     pub msio_control: u32,
     pub gpio_control: u32,
 }
+const _: [(); core::mem::size_of::<Config>()] = [(); 0x98];
 
 #[repr(C, packed)]
 #[derive(Copy, Clone, Pod)]
@@ -81,6 +82,7 @@ pub struct ControlRequest {
     unknown3: u32,
     unknown4: u32,
 }
+const _: [(); core::mem::size_of::<ControlRequest>()] = [(); 0x14];
 
 impl ControlRequest {
     pub fn new(idx: u32, pipe: u8, cmd: u8, len: u32) -> Self {
@@ -100,7 +102,7 @@ impl ControlRequest {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::mem::size_of;
+    use core::mem::size_of;
 
     #[test]
     fn test_struct_sizes() {

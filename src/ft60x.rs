@@ -7,8 +7,8 @@ use rusb::{
     request_type, DeviceHandle, DeviceList, Direction, GlobalContext, Recipient, RequestType,
 };
 
-use std::mem::size_of;
-use std::time::Duration;
+use core::mem::size_of;
+use core::time::Duration;
 
 use log::{info, trace};
 
