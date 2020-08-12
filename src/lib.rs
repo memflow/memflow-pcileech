@@ -13,7 +13,17 @@ pub struct PciLeech {
 impl PciLeech {
     pub fn new() -> Result<Self> {
         let mut device = fpga::Device::new()?;
-        device.get_version()?;
+        // TODO: validate version
+
+        //device.restart().ok();
+
+        // device = fpga::Device::new()?;
+
+        // TODO: validate device id
+        device.get_devid()?;
+
+        // https://github.com/ufrisk/LeechCore/blob/master/leechcore/device_fpga.c#L2133
+
         Ok(Self { device })
     }
 }
