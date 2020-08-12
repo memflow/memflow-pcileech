@@ -31,13 +31,13 @@ pub struct PhyConfig {
 bitfield! {
     pub struct PhyConfigWr(u16);
     impl Debug;
-    pl_directed_link_auton, _: 0;
-    pl_directed_link_change, _: 2, 1;
-    pl_directed_link_speed, _: 3;
-    pl_directed_link_width, _: 5, 4;
-    pl_upstream_prefer_deemph, _: 6;
-    pl_transmit_hot_rst, set_pl_transmit_hot_rst: 7;
-    pl_downstream_deemph_source, _: 8;
+    pub pl_directed_link_auton, set_pl_directed_link_auton: 0;
+    pub pl_directed_link_change, set_pl_directed_link_change: 2, 1;
+    pub pl_directed_link_speed, set_pl_directed_link_speed: 3;
+    pub pl_directed_link_width, set_pl_directed_link_width: 5, 4;
+    pub pl_upstream_prefer_deemph, _: 6;
+    pub pl_transmit_hot_rst, set_pl_transmit_hot_rst: 7;
+    pub pl_downstream_deemph_source, _: 8;
     //_, _: 16, 9;
 }
 const _: [(); core::mem::size_of::<PhyConfigWr>()] = [(); 2];
@@ -45,19 +45,19 @@ const _: [(); core::mem::size_of::<PhyConfigWr>()] = [(); 2];
 bitfield! {
     pub struct PhyConfigRd(u32);
     impl Debug;
-    pl_ltssm_state, _: 5, 0;
-    pl_rx_pm_state, _: 7, 6;
-    pl_tx_pm_state, _: 10, 8;
-    pl_initial_link_width, _: 13, 11;
-    pl_lane_reversal_mode, _: 15, 14;
-    pl_sel_lnk_width, _: 17, 16;
-    pl_phy_lnk_up, _: 18;
-    pl_link_gen2_cap, _: 19;
-    pl_link_partner_gen2_supported, _: 20;
-    pl_link_upcfg_cap, _: 21;
-    pl_sel_lnk_rate, _: 22;
-    pl_directed_change_done, _: 23;
-    pl_received_hot_rst, _: 24;
+    pub pl_ltssm_state, _: 5, 0;
+    pub pl_rx_pm_state, _: 7, 6;
+    pub pl_tx_pm_state, _: 10, 8;
+    pub pl_initial_link_width, _: 13, 11;
+    pub pl_lane_reversal_mode, _: 15, 14;
+    pub pl_sel_lnk_width, _: 17, 16;
+    pub pl_phy_lnk_up, _: 18;
+    pub pl_link_gen2_cap, _: 19;
+    pub pl_link_partner_gen2_supported, _: 20;
+    pub pl_link_upcfg_cap, _: 21;
+    pub pl_sel_lnk_rate, _: 22;
+    pub pl_directed_change_done, _: 23;
+    pub pl_received_hot_rst, _: 24;
     //_, _: 31, 25;
 }
 const _: [(); core::mem::size_of::<PhyConfigRd>()] = [(); 4];
@@ -102,69 +102,60 @@ impl Device {
     }
 
     /// Restarts the PCIE device
-    pub fn restart(mut self) -> Result<()> {
+    fn reset_core(&mut self) -> Result<()> {
         let reset_code: [u8; 2] = [0x00, 0x80];
-        self.write_config(
+        self.write_config_ex_raw(
             0x0002,
+            reset_code,
             reset_code,
             FPGA_CONFIG_CORE | FPGA_CONFIG_SPACE_READWRITE,
         )?;
         std::thread::sleep(Duration::from_millis(1000));
+        self.ft60 = FT60x::new()?;
         Ok(())
     }
 
-    pub fn get_devid(&mut self) -> Result<()> {
-        // DeviceFPGA_GetDeviceId_FpgaVersion_ClearPipe
-        self.read_devid_clear_pipe()?;
-
-        self.read_version_v4()?;
-
-        Ok(())
-    }
-
-    fn read_devid_clear_pipe(&mut self) -> Result<()> {
+    /// Clears the pipe before starting any new read attempts
+    pub fn clear_pipe(&mut self) -> Result<()> {
         let dummy = [
             // dword->qword resynch v4.5+
             0x66, 0x66, 0x55, 0x55, 0x66, 0x66, 0x55, 0x55, 0x66, 0x66, 0x55, 0x55, 0x66, 0x66,
             0x55, 0x55, // cmd msg: FPGA bitstream version (major.minor)    v4
             0x00, 0x00, 0x00, 0x00, 0x00, 0x08, 0x13, 0x77,
+            // cmd msg: FPGA bitstream version (major)          v3
+            0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x03, 0x77,
         ];
+
+        //self.reset_core()?;
 
         self.ft60.write_pipe(&dummy)?;
 
         let mut buf = vec![0u8; size::mb(1)];
         if self.ft60.read_pipe(&mut buf[..0x1000])? >= 0x1000 {
             if self.ft60.read_pipe(&mut buf)? == buf.len() {
-                // TODO: reset
+                self.reset_core()?;
             }
         }
 
         Ok(())
     }
 
-    fn read_version_v4(&mut self) -> Result<()> {
+    pub fn read_version(&mut self) -> Result<(u8, u8)> {
         let version_major =
             self.read_config::<u8>(0x0008, FPGA_CONFIG_CORE | FPGA_CONFIG_SPACE_READONLY)?;
         info!("version_major = {}", version_major);
-        if version_major != 4 {
-            return Err(Error::Connector("incompatible fpga version found"));
-        }
 
         let version_minor =
             self.read_config::<u8>(0x0009, FPGA_CONFIG_CORE | FPGA_CONFIG_SPACE_READONLY)?;
         info!("version_minor={}", version_minor);
 
+        Ok((version_major, version_minor))
+    }
+
+    pub fn read_devid(&mut self) -> Result<(u8, u16)> {
         let fpga_id =
             self.read_config::<u8>(0x000a, FPGA_CONFIG_CORE | FPGA_CONFIG_SPACE_READONLY)?;
         info!("fpga_id={}", fpga_id);
-
-        // this will cause the hardware to reset briefly
-        let inactivity_timer = 0x000186a0u32; // set inactivity timer to 1ms (0x0186a0 * 100MHz) [only later activated on UDP bitstreams]
-        self.write_config(
-            0x0008,
-            inactivity_timer,
-            FPGA_CONFIG_CORE | FPGA_CONFIG_SPACE_READWRITE,
-        )?;
 
         let mut device_id = self
             .read_config::<u16>(0x0008, FPGA_CONFIG_PCIE | FPGA_CONFIG_SPACE_READONLY)
@@ -180,7 +171,7 @@ impl Device {
 
             if magic_pcie == 0x6745 {
                 warn!("failed to get device_id. trying to recover via hot reset");
-                self.hot_reset_v4().ok();
+                self.hot_reset().ok();
                 device_id = self
                     .read_config::<u16>(0x0008, FPGA_CONFIG_PCIE | FPGA_CONFIG_SPACE_READONLY)
                     .unwrap_or_default();
@@ -188,37 +179,51 @@ impl Device {
         }
         info!("device_id={:?}", device_id);
 
-        let (wr, rd) = self.get_phy_v4()?;
-        println!("wr: {:?}", wr);
-        println!("rd: {:?}", rd);
-
-        /*
-        ctx->wDeviceId = _byteswap_ushort(wbsDeviceId);
-        ctx->phySupported = DeviceFPGA_GetPHYv4(ctx);
-        */
-
-        Ok(())
+        // ctx->wDeviceId = _byteswap_ushort(wbsDeviceId);
+        Ok((fpga_id, device_id))
     }
 
-    fn hot_reset_v4(&mut self) -> Result<()> {
-        trace!("hot resetting the fpga");
-        let (mut wr, _) = self.get_phy_v4()?;
+    pub fn write_inactivity_timer(&mut self) -> Result<()> {
+        let inactivity_timer = 0x000186a0u32; // set inactivity timer to 1ms (0x0186a0 * 100MHz) [only later activated on UDP bitstreams]
+        self.write_config(
+            0x0008,
+            inactivity_timer,
+            FPGA_CONFIG_CORE | FPGA_CONFIG_SPACE_READWRITE,
+        )
+    }
+
+    pub fn hot_reset(&mut self) -> Result<()> {
+        warn!("hot resetting the fpga");
+
+        let mut wr = self.get_phy_wr()?;
         wr.set_pl_transmit_hot_rst(true);
-        self.write_config(0x0016, wr.0, FPGA_CONFIG_PCIE | FPGA_CONFIG_SPACE_READWRITE)?;
+        self.set_phy_wr(&wr)?;
 
         std::thread::sleep(Duration::from_millis(250)); // TODO: poll pl_ltssm_state + timeout with failure
 
         wr.set_pl_transmit_hot_rst(false);
-        self.write_config(0x0016, wr.0, FPGA_CONFIG_PCIE | FPGA_CONFIG_SPACE_READWRITE)?;
+        self.set_phy_wr(&wr)?;
         Ok(())
     }
 
-    fn get_phy_v4(&mut self) -> Result<(PhyConfigWr, PhyConfigRd)> {
+    pub fn get_phy(&mut self) -> Result<(PhyConfigWr, PhyConfigRd)> {
+        Ok((self.get_phy_wr()?, self.get_phy_rd()?))
+    }
+
+    pub fn get_phy_wr(&mut self) -> Result<PhyConfigWr> {
         let wr_raw =
             self.read_config::<u16>(0x0016, FPGA_CONFIG_PCIE | FPGA_CONFIG_SPACE_READWRITE)?;
+        Ok(PhyConfigWr { 0: wr_raw })
+    }
+
+    pub fn set_phy_wr(&mut self, wr: &PhyConfigWr) -> Result<()> {
+        self.write_config(0x0016, wr.0, FPGA_CONFIG_PCIE | FPGA_CONFIG_SPACE_READWRITE)
+    }
+
+    pub fn get_phy_rd(&mut self) -> Result<PhyConfigRd> {
         let rd_raw =
             self.read_config::<u32>(0x000a, FPGA_CONFIG_PCIE | FPGA_CONFIG_SPACE_READONLY)?;
-        Ok((PhyConfigWr { 0: wr_raw }, PhyConfigRd { 0: rd_raw }))
+        Ok(PhyConfigRd { 0: rd_raw })
     }
 
     #[allow(clippy::uninit_assumed_init)]
@@ -344,6 +349,36 @@ impl Device {
 
     fn write_config_raw(&mut self, addr: u16, buf: &[u8], flags: u16) -> Result<()> {
         let outbuf = Self::write_config_build_request(addr, buf, flags)?;
+        self.ft60.write_pipe(&outbuf)
+    }
+
+    fn write_config_ex_build_request(
+        addr: u16,
+        buf: [u8; 2],
+        mask: [u8; 2],
+        flags: u16,
+    ) -> Result<[u8; 8]> {
+        let a = (addr as u16) | (flags & 0x8000);
+        Ok([
+            buf[0],
+            buf[1],
+            mask[0],
+            mask[1],
+            (a >> 8) as u8,                // addr_high
+            (a & 0xFF) as u8,              // addr_low
+            (0x20 | (flags & 0x03)) as u8, // target = bit[0:1], read = bit[4], write = bit[5]
+            0x77,                          // MAGIC 0x77
+        ])
+    }
+
+    fn write_config_ex_raw(
+        &mut self,
+        addr: u16,
+        buf: [u8; 2],
+        mask: [u8; 2],
+        flags: u16,
+    ) -> Result<()> {
+        let outbuf = Self::write_config_ex_build_request(addr, buf, mask, flags)?;
         self.ft60.write_pipe(&outbuf)
     }
 }
@@ -528,5 +563,18 @@ mod tests {
             outbuf,
             [160, 134, 255, 255, 128, 8, 35, 119, 1, 0, 255, 255, 128, 10, 35, 119]
         );
+    }
+
+    #[test]
+    fn write_config_core_reset() {
+        let code: [u8; 2] = [0x00, 0x80];
+        let outbuf = Device::write_config_ex_build_request(
+            0x0002,
+            code,
+            code,
+            FPGA_CONFIG_CORE | FPGA_CONFIG_SPACE_READWRITE,
+        )
+        .unwrap();
+        assert_eq!(outbuf, [0, 128, 0, 128, 128, 2, 35, 119,]);
     }
 }
