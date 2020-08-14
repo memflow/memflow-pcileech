@@ -12,6 +12,7 @@ use memflow_core::{
 
 use bitfield::bitfield;
 use dataview::Pod;
+use pretty_hex::*;
 
 pub const FPGA_CONFIG_CORE: u16 = 0x0003;
 pub const FPGA_CONFIG_PCIE: u16 = 0x0001;
@@ -76,11 +77,9 @@ impl Device {
 
         // check chip configuration
         let mut conf = ft60.config()?;
-        trace!(
+        info!(
             "ft60x config: fifo_mode={} channel_config={} optional_feature={}",
-            conf.fifo_mode,
-            conf.channel_config,
-            conf.optional_feature_support
+            conf.fifo_mode, conf.channel_config, conf.optional_feature_support
         );
 
         if conf.fifo_mode != FifoMode::Mode245 as i8
@@ -224,6 +223,45 @@ impl Device {
         let rd_raw =
             self.read_config::<u32>(0x000a, FPGA_CONFIG_PCIE | FPGA_CONFIG_SPACE_READONLY)?;
         Ok(PhyConfigRd { 0: rd_raw })
+    }
+
+    /// Prints out all internal registers of the FPGA to `info!()`
+    /// In detail this will request the core/pcie readonly and read/write registers
+    /// and print them out via `info!()`. This is usually useful when debugging any
+    /// issues with the hardware.
+    pub fn print_registers(&mut self) -> Result<()> {
+        info!(
+            "core read-only registers: {:?}",
+            self.get_register(FPGA_CONFIG_CORE | FPGA_CONFIG_SPACE_READONLY)?
+                .hex_dump()
+        );
+        info!(
+            "core read-write registers: {:?}",
+            self.get_register(FPGA_CONFIG_CORE | FPGA_CONFIG_SPACE_READWRITE)?
+                .hex_dump()
+        );
+        info!(
+            "pcie read-only registers: {:?}",
+            self.get_register(FPGA_CONFIG_PCIE | FPGA_CONFIG_SPACE_READONLY)?
+                .hex_dump()
+        );
+        info!(
+            "core read-write registers: {:?}",
+            self.get_register(FPGA_CONFIG_PCIE | FPGA_CONFIG_SPACE_READWRITE)?
+                .hex_dump()
+        );
+        Ok(())
+    }
+
+    fn get_register(&mut self, flags: u16) -> Result<Vec<u8>> {
+        let size = self.read_config::<u16>(0x0004, flags)?;
+        info!(
+            "reading fpga device config register {:x} with a length of {:x} bytes.",
+            flags, size
+        );
+        let mut buf = vec![0u8; size as usize];
+        self.read_config_into_raw(0x0000, &mut buf[..], flags)?;
+        Ok(buf)
     }
 
     #[allow(clippy::uninit_assumed_init)]

@@ -40,10 +40,13 @@ impl PciLeech {
         device.write_inactivity_timer()?;
 
         let device_id = device.read_devid()?;
+        if device_id.1 == 0 {
+            return Err(Error::Connector("fpga did not find a valid pcie device id"));
+        }
 
         let (wr, rd) = device.get_phy()?;
 
-        // https://github.com/ufrisk/LeechCore/blob/master/leechcore/device_fpga.c#L2133
+        device.print_registers().ok();
 
         Ok(Self {
             device,
