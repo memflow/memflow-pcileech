@@ -1,3 +1,7 @@
+// TODO: unpub?
+pub mod tlps;
+use tlps::*;
+
 use crate::ft60x::*;
 
 use core::mem::MaybeUninit;
@@ -159,7 +163,6 @@ impl Device {
         let mut device_id = self
             .read_config::<u16>(0x0008, FPGA_CONFIG_PCIE | FPGA_CONFIG_SPACE_READONLY)
             .unwrap_or_default();
-        info!("device_id={}", device_id);
         if device_id == 0 {
             info!("pci device_id is unset. checking pcie magic.");
 
@@ -176,10 +179,11 @@ impl Device {
                     .unwrap_or_default();
             }
         }
-        info!("device_id={:?}", device_id);
+        let device_id_le = device_id.to_be();
+        info!("device_id={:?}", device_id_le);
 
-        // ctx->wDeviceId = _byteswap_ushort(wbsDeviceId);
-        Ok((fpga_id, device_id))
+        // swap device_id bytes only on LE systems
+        Ok((fpga_id, device_id_le))
     }
 
     pub fn write_inactivity_timer(&mut self) -> Result<()> {
@@ -262,6 +266,127 @@ impl Device {
         let mut buf = vec![0u8; size as usize];
         self.read_config_into_raw(0x0000, &mut buf[..], flags)?;
         Ok(buf)
+    }
+
+    // TODO: implement more config dump options
+    fn get_pcie_drp(&mut self) {
+        let read_enable = [0x10, 0x00, 0x10, 0x00, 0x80, 0x02, 0x23, 0x77];
+        let read_address = [0x00, 0x00, 0xff, 0xff, 0x80, 0x1c, 0x23, 0x77];
+        let result_meta = [0x00, 0x00, 0x00, 0x00, 0x80, 0x1c, 0x13, 0x77];
+        let result_data = [0x00, 0x00, 0x00, 0x00, 0x00, 0x20, 0x13, 0x77];
+
+        // create read request
+        for addr in (0..0x100).step_by(32) {
+            for dw in (0..32).step_by(2) {}
+        }
+
+        // interpret result
+    }
+
+    // TODO: send_tlp_ ...
+    /*pub fn send_tlp32(&mut self, tlp: u32, keep_alive: bool, flush: bool) -> Result<()> {
+        self.send_tlp_raw(tlp.as_bytes(), keep_alive, flush)
+    }
+
+    pub fn send_tlp64(&mut self, tlp: u64, keep_alive: bool, flush: bool) -> Result<()> {
+        self.send_tlp_raw(tlp.as_bytes(), keep_alive, flush)
+    }*/
+
+    // TODO: this is duplicated code (see config_parse_response)
+    pub fn recv_tlps_64(&mut self, bytes: u32 /* maybe u16? */) -> Result<()> {
+        let mut respbuf = vec![0u8; 0x1000]; // TEST
+        self.ft60.read_pipe(&mut respbuf)?;
+
+        let view = respbuf.as_data_view();
+        let mut skip = 0;
+        for i in (0..respbuf.len()).step_by(32) {
+            if i + skip >= respbuf.len() {
+                break;
+            }
+
+            while view.copy::<u32>(i + skip) == 0x55556666 {
+                trace!("ftdi workaround detected, skipping 4 bytes");
+                skip += 4;
+                if i + skip + 32 > respbuf.len() {
+                    return Err(Error::Connector("out of range config read"));
+                }
+            }
+
+            let mut status = view.copy::<u32>(i + skip);
+            if status & 0xf0000000 != 0xe0000000 {
+                trace!("invalid status reply, skipping");
+                continue;
+            }
+
+            trace!("parsing data buffer");
+            for j in 0..7 {
+                if (status & 0x03) == 0 {
+                    println!("pcie tlp received :)");
+                }
+                if (status & 0x07) == 4 {
+                    println!("pcie tlp LAST received :)");
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn send_tlps_64(&mut self, tlps: &[TlpReadWrite64], keep_alive: bool) -> Result<()> {
+        let bytes = tlps
+            .iter()
+            .map(|t| t.as_bytes())
+            .collect::<Vec<_>>()
+            .concat();
+
+        let bytes32 =
+            unsafe { std::slice::from_raw_parts(bytes.as_ptr() as *const u32, bytes.len() / 4) };
+
+        self.send_tlps_raw(&bytes32, keep_alive)
+    }
+
+    /// Send a TLP to the fpga
+    fn send_tlps_raw(&mut self, tlps: &[u32], keep_alive: bool) -> Result<()> {
+        if tlps.len() > 4 + 32 {
+            return Err(Error::Connector("tlp buffer is too large"));
+        }
+        /*
+        if(cbTlp && (ctx->txbuf.cb + (cbTlp << 1) + (fFlush ? 8 : 0) >= ctx->perf.MAX_SIZE_TX)) {
+            if(!DeviceFPGA_TxTlp(ctxLC, ctx, NULL, 0, FALSE, TRUE)) { return FALSE; }
+        }
+        */
+
+        // TLP_Print
+
+        // create transmit buffer
+        let mut buf = Vec::new();
+        for tlp in tlps.iter() {
+            buf.push(tlp.to_be());
+            buf.push(0x77000000); // TX TLP
+        }
+
+        // TODO: remove this pop in the algorithm
+        if !tlps.is_empty() {
+            buf.pop();
+            buf.push(0x77040000); // TX TLP VALID LAST
+        }
+
+        if keep_alive {
+            buf.push(0xffeeddcc);
+            buf.push(0x77020000);
+        }
+
+        // currently we just flush out every tlp transmission immediately
+        // and not buffer them internally.
+        let byte_buf: &[u8] = unsafe { std::mem::transmute(buf.as_slice()) };
+
+        // TODO: handle error codes?
+        self.ft60.write_pipe(byte_buf)?;
+        //        if status == 0x20 {
+        // failure
+        //      }
+
+        Ok(())
     }
 
     #[allow(clippy::uninit_assumed_init)]

@@ -1,6 +1,9 @@
 mod fpga;
 mod ft60x;
 
+//TODO: move?
+use fpga::tlps::*;
+
 use log::{info, warn};
 
 use fpga::{PhyConfigRd, PhyConfigWr};
@@ -61,6 +64,23 @@ impl PciLeech {
         })
     }
 
+    pub fn pcie_link_width(&self) -> u8 {
+        match self.phy_rd.pl_sel_lnk_width() {
+            0 => 1,
+            1 => 2,
+            2 => 4,
+            3 => 8,
+            _ => 0, // invalid
+        }
+    }
+
+    pub fn pcie_gen(&self) -> u8 {
+        match self.phy_rd.pl_sel_lnk_rate() {
+            false => 1,
+            true => 2,
+        }
+    }
+
     pub fn set_pcie_gen(&mut self, gen: PcieGen) -> Result<()> {
         let gen2 = match gen {
             PcieGen::Gen1 => false,
@@ -105,6 +125,34 @@ impl PciLeech {
         // update internal state
         self.phy_wr = self.device.get_phy_wr()?;
         self.phy_rd = self.device.get_phy_rd()?;
+
+        Ok(())
+    }
+
+    // test read functions
+    pub fn test_read(&mut self) -> Result<()> {
+        // create read request
+        /*
+        // cb
+        // device id
+        // addr
+         */
+
+        // TODO: 32bit target
+        let tag = 0; // 0x80 for ecc?
+        println!("stuff0");
+        let tlp = TlpReadWrite64::new_read(0x1000, 0x1000, tag, self.device_id);
+        // TODO: tag++ for every tlp in one request?
+        println!("stuff1");
+        self.device.send_tlps_64(&[tlp], false)?;
+
+        // TODO: read stuff back synchronously?
+        println!("stuff2");
+        std::thread::sleep(std::time::Duration::from_millis(25));
+
+        // bytes added together from read requests
+        self.device.recv_tlps_64(0x1000)?;
+        println!("stuff3");
 
         Ok(())
     }
