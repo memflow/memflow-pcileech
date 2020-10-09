@@ -12,7 +12,7 @@ use core::time::Duration;
 
 use log::{info, trace};
 
-use memflow_core::error::{Error, Result};
+use memflow::error::{Error, Result};
 
 use dataview::Pod;
 

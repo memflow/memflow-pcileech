@@ -8,10 +8,11 @@ use log::{info, warn};
 
 use fpga::{PhyConfigRd, PhyConfigWr};
 
-use memflow_core::connector::ConnectorArgs;
-use memflow_core::*;
+use memflow::connector::ConnectorArgs;
+use memflow::*;
 use memflow_derive::connector;
 
+#[derive(Debug)]
 pub enum PcieGen {
     Gen1 = 0,
     Gen2 = 1,
@@ -74,25 +75,22 @@ impl PciLeech {
         }
     }
 
-    pub fn pcie_gen(&self) -> u8 {
+    pub fn pcie_gen(&self) -> PcieGen {
         match self.phy_rd.pl_sel_lnk_rate() {
-            false => 1,
-            true => 2,
+            0 => PcieGen::Gen1,
+            1 => PcieGen::Gen2,
+            _ => panic!("invalid sel_lnk_rate"),
         }
     }
 
     pub fn set_pcie_gen(&mut self, gen: PcieGen) -> Result<()> {
-        let gen2 = match gen {
-            PcieGen::Gen1 => false,
-            PcieGen::Gen2 => true,
-        };
-
-        if gen2 == self.phy_rd.pl_sel_lnk_rate() {
+        let genb = gen as u8;
+        if genb == self.phy_rd.pl_sel_lnk_rate() {
             info!("requested pcie gen already set.");
             return Ok(());
         }
 
-        if gen2 && !self.phy_rd.pl_link_gen2_cap() {
+        if genb != 0 && self.phy_rd.pl_link_gen2_cap() == 0 {
             warn!("pcie gen2 is not supported by the fpga configuration");
             return Err(Error::Connector(
                 "pcie gen2 is not supported by the fpga configuration",
@@ -100,15 +98,15 @@ impl PciLeech {
         }
 
         // update config
-        self.phy_wr.set_pl_directed_link_auton(true);
-        self.phy_wr.set_pl_directed_link_speed(gen2);
+        self.phy_wr.set_pl_directed_link_auton(1);
+        self.phy_wr.set_pl_directed_link_speed(genb);
         self.phy_wr.set_pl_directed_link_change(2);
         self.device.set_phy_wr(&self.phy_wr)?;
 
         // poll config update
         for _ in 0..32 {
             if let Ok(rd) = self.device.get_phy_rd() {
-                if rd.pl_directed_change_done() {
+                if rd.pl_directed_change_done() == 1 {
                     info!("fpga changes successfully applied");
                     self.phy_rd = rd;
                     break;
@@ -117,8 +115,8 @@ impl PciLeech {
         }
 
         // reset config
-        self.phy_wr.set_pl_directed_link_auton(false);
-        self.phy_wr.set_pl_directed_link_speed(false);
+        self.phy_wr.set_pl_directed_link_auton(0);
+        self.phy_wr.set_pl_directed_link_speed(0);
         self.phy_wr.set_pl_directed_link_change(0);
         self.device.set_phy_wr(&self.phy_wr)?;
 
@@ -132,28 +130,7 @@ impl PciLeech {
     // test read functions
     pub fn test_read(&mut self) -> Result<()> {
         // create read request
-        /*
-        // cb
-        // device id
-        // addr
-         */
-
-        // TODO: 32bit target
-        let tag = 0; // 0x80 for ecc?
-        println!("stuff0");
-        let tlp = TlpReadWrite64::new_read(0x1000, 0x1000, tag, self.device_id);
-        // TODO: tag++ for every tlp in one request?
-        println!("stuff1");
-        self.device.send_tlps_64(&[tlp], false)?;
-
-        // TODO: read stuff back synchronously?
-        println!("stuff2");
-        std::thread::sleep(std::time::Duration::from_millis(25));
-
-        // bytes added together from read requests
-        self.device.recv_tlps_64(0x1000)?;
-        println!("stuff3");
-
+        self.device.read_mem_into_raw(0x1000, 0x1000, self.device_id);
         Ok(())
     }
 }
@@ -169,6 +146,10 @@ impl PhysicalMemory for PciLeech {
         Err(Error::Connector(
             "memflow_pcileech::phys_write_iter not implemented",
         ))
+    }
+
+    fn metadata(&self) -> PhysicalMemoryMetadata {
+        panic!()
     }
 }
 

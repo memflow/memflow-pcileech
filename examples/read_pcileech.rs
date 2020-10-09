@@ -1,6 +1,6 @@
 use log::Level;
 
-use memflow_core::connector::ConnectorArgs;
+use memflow::connector::ConnectorArgs;
 use memflow_pcileech::{create_connector, PcieGen};
 
 fn main() {
@@ -10,7 +10,7 @@ fn main() {
 
     // TODO: put this + more in a conn print trait ->
     println!(
-        "pcie device opened with link width {} and pcie gen {}",
+        "pcie device opened with link width {} and pcie gen {:?}",
         conn.pcie_link_width(),
         conn.pcie_gen()
     );

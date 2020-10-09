@@ -9,12 +9,12 @@ use core::time::Duration;
 
 use log::{info, trace, warn};
 
-use memflow_core::{
+use memflow::{
     error::{Error, Result},
     size,
 };
 
-use bitfield::bitfield;
+use c2rust_bitfields::*;
 use dataview::Pod;
 use pretty_hex::*;
 
@@ -33,37 +33,37 @@ pub struct PhyConfig {
     pub rd: PhyConfigRd, // 32 bits
 }
 
-bitfield! {
-    pub struct PhyConfigWr(u16);
-    impl Debug;
-    pub pl_directed_link_auton, set_pl_directed_link_auton: 0;
-    pub pl_directed_link_change, set_pl_directed_link_change: 2, 1;
-    pub pl_directed_link_speed, set_pl_directed_link_speed: 3;
-    pub pl_directed_link_width, set_pl_directed_link_width: 5, 4;
-    pub pl_upstream_prefer_deemph, _: 6;
-    pub pl_transmit_hot_rst, set_pl_transmit_hot_rst: 7;
-    pub pl_downstream_deemph_source, _: 8;
-    //_, _: 16, 9;
+#[repr(C, align(1))]
+#[derive(BitfieldStruct, Pod)]
+pub struct PhyConfigWr {
+    #[bitfield(name = "pl_directed_link_auton", ty = "libc::uint8_t", bits = "0..=0")]
+    #[bitfield(name = "pl_directed_link_change", ty = "libc::uint8_t", bits = "1..=2")]
+    #[bitfield(name = "pl_directed_link_speed", ty = "libc::uint8_t", bits = "3..=3")]
+    #[bitfield(name = "pl_directed_link_width", ty = "libc::uint8_t", bits = "4..=5")]
+    #[bitfield(name = "pl_upstream_prefer_deemph", ty = "libc::uint8_t", bits = "6..=6")]
+    #[bitfield(name = "pl_transmit_hot_rst", ty = "libc::uint8_t", bits = "7..=7")]
+    #[bitfield(name = "pl_downstream_deemph_source", ty = "libc::uint8_t", bits = "8..=8")]
+    buffer: [u8; 2],
 }
 const _: [(); core::mem::size_of::<PhyConfigWr>()] = [(); 2];
 
-bitfield! {
-    pub struct PhyConfigRd(u32);
-    impl Debug;
-    pub pl_ltssm_state, _: 5, 0;
-    pub pl_rx_pm_state, _: 7, 6;
-    pub pl_tx_pm_state, _: 10, 8;
-    pub pl_initial_link_width, _: 13, 11;
-    pub pl_lane_reversal_mode, _: 15, 14;
-    pub pl_sel_lnk_width, _: 17, 16;
-    pub pl_phy_lnk_up, _: 18;
-    pub pl_link_gen2_cap, _: 19;
-    pub pl_link_partner_gen2_supported, _: 20;
-    pub pl_link_upcfg_cap, _: 21;
-    pub pl_sel_lnk_rate, _: 22;
-    pub pl_directed_change_done, _: 23;
-    pub pl_received_hot_rst, _: 24;
-    //_, _: 31, 25;
+#[repr(C, align(1))]
+#[derive(BitfieldStruct, Pod)]
+pub struct PhyConfigRd {
+    #[bitfield(name = "pl_ltssm_state", ty = "libc::uint8_t", bits = "0..=5")]
+    #[bitfield(name = "pl_rx_pm_state", ty = "libc::uint8_t", bits = "6..=7")]
+    #[bitfield(name = "pl_tx_pm_state", ty = "libc::uint8_t", bits = "8..=10")]
+    #[bitfield(name = "pl_initial_link_width", ty = "libc::uint8_t", bits = "11..=13")]
+    #[bitfield(name = "pl_lane_reversal_mode", ty = "libc::uint8_t", bits = "14..=15")]
+    #[bitfield(name = "pl_sel_lnk_width", ty = "libc::uint8_t", bits = "16..=17")]
+    #[bitfield(name = "pl_phy_lnk_up", ty = "libc::uint8_t", bits = "18..=18")]
+    #[bitfield(name = "pl_link_gen2_cap", ty = "libc::uint8_t", bits = "19..=19")]
+    #[bitfield(name = "pl_link_partner_gen2_supported", ty = "libc::uint8_t", bits = "20..=20")]
+    #[bitfield(name = "pl_link_upcfg_cap", ty = "libc::uint8_t", bits = "21..=21")]
+    #[bitfield(name = "pl_sel_lnk_rate", ty = "libc::uint8_t", bits = "22..=22")]
+    #[bitfield(name = "pl_directed_change_done", ty = "libc::uint8_t", bits = "23..=23")]
+    #[bitfield(name = "pl_received_hot_rst", ty = "libc::uint8_t", bits = "24..=24")]
+    buffer: [u8; 4],
 }
 const _: [(); core::mem::size_of::<PhyConfigRd>()] = [(); 4];
 
@@ -199,12 +199,12 @@ impl Device {
         warn!("hot resetting the fpga");
 
         let mut wr = self.get_phy_wr()?;
-        wr.set_pl_transmit_hot_rst(true);
+        wr.set_pl_transmit_hot_rst(1);
         self.set_phy_wr(&wr)?;
 
         std::thread::sleep(Duration::from_millis(250)); // TODO: poll pl_ltssm_state + timeout with failure
 
-        wr.set_pl_transmit_hot_rst(false);
+        wr.set_pl_transmit_hot_rst(0);
         self.set_phy_wr(&wr)?;
         Ok(())
     }
@@ -216,17 +216,17 @@ impl Device {
     pub fn get_phy_wr(&mut self) -> Result<PhyConfigWr> {
         let wr_raw =
             self.read_config::<u16>(0x0016, FPGA_CONFIG_PCIE | FPGA_CONFIG_SPACE_READWRITE)?;
-        Ok(PhyConfigWr { 0: wr_raw })
+        Ok(PhyConfigWr { buffer: u16::to_le_bytes(wr_raw) })
     }
 
     pub fn set_phy_wr(&mut self, wr: &PhyConfigWr) -> Result<()> {
-        self.write_config(0x0016, wr.0, FPGA_CONFIG_PCIE | FPGA_CONFIG_SPACE_READWRITE)
+        self.write_config(0x0016, u16::from_le_bytes(wr.buffer), FPGA_CONFIG_PCIE | FPGA_CONFIG_SPACE_READWRITE)
     }
 
     pub fn get_phy_rd(&mut self) -> Result<PhyConfigRd> {
         let rd_raw =
             self.read_config::<u32>(0x000a, FPGA_CONFIG_PCIE | FPGA_CONFIG_SPACE_READONLY)?;
-        Ok(PhyConfigRd { 0: rd_raw })
+        Ok(PhyConfigRd { buffer: u32::to_le_bytes(rd_raw) })
     }
 
     /// Prints out all internal registers of the FPGA to `info!()`
@@ -293,9 +293,14 @@ impl Device {
     }*/
 
     // TODO: this is duplicated code (see config_parse_response)
+    // https://github.com/ufrisk/LeechCore/blob/master/leechcore/device_fpga.c#L1603
     pub fn recv_tlps_64(&mut self, bytes: u32 /* maybe u16? */) -> Result<()> {
-        let mut respbuf = vec![0u8; 0x1000]; // TEST
+        let mut respbuf = vec![0u8; 0x4000]; // TEST
         self.ft60.read_pipe(&mut respbuf)?;
+
+        //let tlps = [0u8; 16+512]; // TLP_RX_MAX_SIZE
+        //let tlp_num = 0;
+        let mut tlps = Vec::new();
 
         let view = respbuf.as_data_view();
         let mut skip = 0;
@@ -318,55 +323,60 @@ impl Device {
                 continue;
             }
 
-            trace!("parsing data buffer");
-            for j in 0..7 {
+            //trace!("parsing tlp data buffer");
+            let mut tlp_offs = 0;
+            for _ in 0..7 {
                 if (status & 0x03) == 0 {
-                    println!("pcie tlp received :)");
+                    // println!("pcie tlp received :)");
+                    tlps.push(view.copy::<u32>(i + skip + 4 + tlp_offs));
+                    // if(tlps.len() >= TLP_RX_MAX_SIZE / sizeof(DWORD)) { return; }
                 }
                 if (status & 0x07) == 4 {
-                    println!("pcie tlp LAST received :)");
+                    //println!("pcie tlp LAST received :)");
+                    // TODO: dispatch tlp buffer
+                    if tlps.len() >= 3 {
+                        println!("received {} tlps", tlps.len() << 2);
+                        // TODO: transmute tlps buffer to tlp header
+                        
+                    } else {
+                        println!("received {} tlps - ERROR, Bad PCIe TLP received", tlps.len() << 2);
+                    }
+                    tlps.clear();
                 }
+                tlp_offs += 4;
+                status >>= 4;
             }
         }
 
         Ok(())
     }
 
-    pub fn send_tlps_64(&mut self, tlps: &[TlpReadWrite64], keep_alive: bool) -> Result<()> {
-        let bytes = tlps
-            .iter()
-            .map(|t| t.as_bytes())
-            .collect::<Vec<_>>()
-            .concat();
-
-        let bytes32 =
+    fn read_mem_build_request(bytes: &[u8], keep_alive: bool) -> Result<Vec<u8>> {
+        // convert slice into [u32] slice which is 4 times smaller
+        let dwords =
             unsafe { std::slice::from_raw_parts(bytes.as_ptr() as *const u32, bytes.len() / 4) };
 
-        self.send_tlps_raw(&bytes32, keep_alive)
-    }
-
-    /// Send a TLP to the fpga
-    fn send_tlps_raw(&mut self, tlps: &[u32], keep_alive: bool) -> Result<()> {
-        if tlps.len() > 4 + 32 {
+        // tlp buffer constraints
+        if (bytes.len() & 0x3) != 0 || bytes.len() > 4 * 4 + 128 {
             return Err(Error::Connector("tlp buffer is too large"));
         }
         /*
-        if(cbTlp && (ctx->txbuf.cb + (cbTlp << 1) + (fFlush ? 8 : 0) >= ctx->perf.MAX_SIZE_TX)) {
-            if(!DeviceFPGA_TxTlp(ctxLC, ctx, NULL, 0, FALSE, TRUE)) { return FALSE; }
-        }
+            if(cbTlp && (txbuf_cb + (cbTlp << 1) + (fFlush ? 8 : 0) >= MAX_SIZE_TX)) {
+                if(!DeviceFPGA_TxTlp(NULL, 0, FALSE, TRUE)) { return FALSE; }
+            }
         */
 
         // TLP_Print
 
         // create transmit buffer
         let mut buf = Vec::new();
-        for tlp in tlps.iter() {
+        for tlp in dwords.iter() {
             buf.push(tlp.to_be());
             buf.push(0x77000000); // TX TLP
         }
 
         // TODO: remove this pop in the algorithm
-        if !tlps.is_empty() {
+        if !bytes.is_empty() {
             buf.pop();
             buf.push(0x77040000); // TX TLP VALID LAST
         }
@@ -378,13 +388,39 @@ impl Device {
 
         // currently we just flush out every tlp transmission immediately
         // and not buffer them internally.
-        let byte_buf: &[u8] = unsafe { std::mem::transmute(buf.as_slice()) };
+        let byte_buf = buf
+            .iter()
+            .map(|&t| u32::to_le_bytes(t))
+            .collect::<Vec<_>>()
+            .concat();
 
-        // TODO: handle error codes?
-        self.ft60.write_pipe(byte_buf)?;
-        //        if status == 0x20 {
-        // failure
-        //      }
+        Ok(byte_buf.to_vec())
+    }
+
+    pub fn read_mem_into_raw(&mut self, addr: u64, size: u64, device_id: u16) -> Result<()> {
+
+        // TODO: safety checks
+        // TODO: split by page and page align
+
+        let tlp = if addr < size::gb(4) as u64 {
+            TlpReadWrite32::new_read(addr as u32, size as u16, 0x0, device_id).as_bytes().to_vec()
+        } else {
+             TlpReadWrite64::new_read(addr, size as u16, 0x0, device_id).as_bytes().to_vec()
+        };
+        let req = Self::read_mem_build_request(tlp.as_slice(), false)?;
+
+        self.ft60.write_pipe(&req)?;
+
+        std::thread::sleep(std::time::Duration::from_millis(500));
+
+        self.recv_tlps_64(0x1000)?;
+
+        /*
+        let mut readbuf = [0u8; size::kb(128)];
+        let bytes = self.ft60.read_pipe(&mut readbuf)?;
+
+        Self::read_config_parse_response(addr, &readbuf[..bytes], buf, flags)
+        */
 
         Ok(())
     }
@@ -739,5 +775,26 @@ mod tests {
         )
         .unwrap();
         assert_eq!(outbuf, [0, 128, 0, 128, 128, 2, 35, 119,]);
+    }
+
+    #[test]
+    fn test_read_mem32() {
+        let tlp = TlpReadWrite32::new_read(0x6000, 0x123, 0x80, 17);
+        assert_eq!(
+            Device::read_mem_build_request(&tlp.as_bytes(), false).unwrap(),
+            [0, 0, 0, 72, 0, 0, 0, 119, 0, 17, 128, 255, 0, 0, 0, 119, 0, 0, 96, 0, 0, 0, 4, 119]
+        );
+    }
+
+    #[test]
+    fn test_read_mem64() {
+        let tlp = TlpReadWrite64::new_read(size::gb(4) as u64 + 0x6000, 0x123, 0x80, 17);
+        assert_eq!(
+            Device::read_mem_build_request(&tlp.as_bytes(), false).unwrap(),
+            [
+                32, 0, 0, 72, 0, 0, 0, 119, 0, 17, 128, 255, 0, 0, 0, 119, 0, 0, 0, 1, 0, 0, 0,
+                119, 0, 0, 96, 0, 0, 0, 4, 119
+            ]
+        );
     }
 }

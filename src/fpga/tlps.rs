@@ -1,4 +1,4 @@
-use bitfield::bitfield;
+use c2rust_bitfields::*;
 use dataview::{DataView, Pod};
 
 const TLP_READ_32: u8 = 0x00;
@@ -8,40 +8,33 @@ const fn pack_bits4(first: u8, second: u8) -> u8 {
     (first & ((1 << 4) - 1)) + ((second & ((1 << 4) - 1)) << 4)
 }
 
-const fn split_addr64_high(address: u64) -> u32 {
-    ((address & ((1 << 32) - 1)) >> 32) as u32
-}
-
-const fn split_addr64_low(address: u64) -> u32 {
-    (address & ((1 << 32) - 1)) as u32
-}
-
-bitfield! {
-    pub struct TlpHeader(u32);
-    impl Debug;
-    pub len_tlps, set_len_tlps: 9, 0;
-    pub at, _: 11, 10;
-    pub attr, _: 13, 12;
-    pub ep, _: 14;
-    pub td, _: 15;
-    pub r1, _: 19, 16;
-    pub tc, _: 22, 20;
-    pub r2, _: 23;
-    pub ty, set_ty: 31, 24;
+#[repr(C, align(1))]
+#[derive(BitfieldStruct, Pod)]
+pub struct TlpHeader {
+    #[bitfield(name = "len_tlps", ty = "libc::uint16_t", bits = "0..=9")]
+    #[bitfield(name = "at", ty = "libc::uint16_t", bits = "10..=11")]
+    #[bitfield(name = "attr", ty = "libc::uint16_t", bits = "12..=13")]
+    #[bitfield(name = "ep", ty = "libc::uint16_t", bits = "14..=14")]
+    #[bitfield(name = "td", ty = "libc::uint16_t", bits = "15..=15")]
+    #[bitfield(name = "r1", ty = "libc::uint8_t", bits = "16..=19")]
+    #[bitfield(name = "tc", ty = "libc::uint8_t", bits = "20..=22")]
+    #[bitfield(name = "r2", ty = "libc::uint8_t", bits = "23..=23")]
+    #[bitfield(name = "ty", ty = "libc::uint8_t", bits = "24..=31")]
+    buffer: [u8; 4],
 }
 const _: [(); core::mem::size_of::<TlpHeader>()] = [(); 4];
 
-unsafe impl Pod for TlpHeader {}
-
 impl TlpHeader {
     pub fn new(ty: u8, len_tlps: u16) -> Self {
-        let mut h = Self { 0: 0 };
-
-        println!("ok0");
-        h.set_ty(ty as u32);
-        println!("ok1");
-        h.set_len_tlps(len_tlps as u32);
-        println!("ok2");
+        let mut h = Self::zeroed();
+        h.set_ty(ty);
+        if len_tlps < 0x1000 {
+            // shift length
+            h.set_len_tlps(len_tlps / 4);
+        } else {
+            // max length
+            h.set_len_tlps(len_tlps);
+        }
         h
     }
 }
@@ -61,7 +54,7 @@ const _: [(); core::mem::size_of::<TlpReadWrite32>()] = [(); 0xC];
 impl TlpReadWrite32 {
     pub fn new_read(address: u32, len: u16, tag: u8, requester_id: u16) -> Self {
         Self {
-            header: TlpHeader::new(TLP_READ_32, len / 4),
+            header: TlpHeader::new(TLP_READ_32, len),
             be: pack_bits4(0xF, 0xF),
             tag,
             requester_id,
@@ -102,12 +95,12 @@ const _: [(); core::mem::size_of::<TlpReadWrite64>()] = [(); 0x10];
 impl TlpReadWrite64 {
     pub fn new_read(address: u64, len: u16, tag: u8, requester_id: u16) -> Self {
         Self {
-            header: TlpHeader::new(TLP_READ_64, len / 4),
+            header: TlpHeader::new(TLP_READ_64, len),
             be: pack_bits4(0xF, 0xF),
             tag,
             requester_id,
-            address_high: split_addr64_high(address),
-            address_low: split_addr64_low(address),
+            address_high: (address >> 32) as u32,
+            address_low: address as u32,
         }
     }
 
@@ -124,18 +117,65 @@ impl TlpReadWrite64 {
     }
 
     pub fn set_address(&mut self, address: u64) {
-        self.address_high = split_addr64_high(address);
-        self.address_low = split_addr64_low(address);
+        self.address_high = (address >> 32) as u32;
+        self.address_low = address as u32;
     }
 }
 
+/// Tlp Packet - Completion with Data
+#[repr(C, align(1))]
+#[derive(BitfieldStruct, Pod)]
+pub struct TlpCplD {
+    header: TlpHeader,
+    #[bitfield(name = "byte_count", ty = "libc::uint16_t", bits = "0..=11")]
+    #[bitfield(name = "attr", ty = "libc::uint16_t", bits = "12..=12")]
+    #[bitfield(name = "ep", ty = "libc::uint16_t", bits = "13..=15")]
+    buffer1: [u8; 2],
+    completer_id: u16,
+    #[bitfield(name = "lower_addr", ty = "libc::uint8_t", bits = "0..=6")]
+    #[bitfield(name = "r1", ty = "libc::uint8_t", bits = "7..=7")]
+    buffer2: [u8; 1],
+    tag: u8,
+    requester_id: u16,
+}
+//const _: [(); core::mem::size_of::<TlpCplD>()] = [(); 0x10];
+
 #[cfg(test)]
 mod tests {
-    use super::pack_bits4;
+    use super::{pack_bits4, TlpHeader, TlpReadWrite32, TlpReadWrite64, TLP_READ_32, TLP_READ_64};
+    use dataview::Pod;
+    use memflow::size;
 
     #[test]
     fn test_pack_bits4() {
         assert_eq!(pack_bits4(0xA, 0xB), 0xBA);
         assert_eq!(pack_bits4(0xAB, 0xCD), 0xDB);
+    }
+
+    #[test]
+    fn test_header32() {
+        let header = TlpHeader::new(TLP_READ_32, 0x123);
+        assert_eq!(header.as_bytes(), &[72, 0, 0, 0])
+    }
+
+    #[test]
+    fn test_header64() {
+        let header = TlpHeader::new(TLP_READ_64, 0x123);
+        assert_eq!(header.as_bytes(), &[72, 0, 0, 32])
+    }
+
+    #[test]
+    fn test_tlp_rw32() {
+        let tlp = TlpReadWrite32::new_read(0x6000, 0x123, 0x80, 17);
+        assert_eq!(tlp.as_bytes(), &[72, 0, 0, 0, 255, 128, 17, 0, 0, 96, 0, 0])
+    }
+
+    #[test]
+    fn test_tlp_rw64() {
+        let tlp = TlpReadWrite64::new_read(size::gb(4) as u64 + 0x6000, 0x123, 0x80, 17);
+        assert_eq!(
+            tlp.as_bytes(),
+            &[72, 0, 0, 32, 255, 128, 17, 0, 1, 0, 0, 0, 0, 96, 0, 0]
+        )
     }
 }
