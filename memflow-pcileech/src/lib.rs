@@ -2,6 +2,8 @@
 
 use std::ffi::CString;
 use std::os::raw::c_char;
+use std::sync::Arc;
+use std::sync::Mutex;
 
 use libc::malloc;
 use log::{error, info, warn};
@@ -38,16 +40,18 @@ fn build_lc_config(device: &str) -> LC_CONFIG {
 
 #[derive(Debug)]
 pub struct PciLeech {
-    handle: HANDLE,
+    handle: Arc<Mutex<HANDLE>>,
+    metadata: PhysicalMemoryMetadata,
 }
 
-// TODO:
 unsafe impl Send for PciLeech {}
 
-// TODO: implement me
 impl Clone for PciLeech {
     fn clone(&self) -> Self {
-        panic!("unable to clone pcileech connector");
+        Self {
+            handle: self.handle.clone(),
+            metadata: self.metadata.clone(),
+        }
     }
 }
 
@@ -65,12 +69,25 @@ impl PciLeech {
             return Err(Error::Connector("unable to create leechcore context"));
         }
 
-        Ok(Self { handle })
+        error!("fVolatile: {:?}", conf.fVolatile);
+        error!("fWritable: {:?}", conf.fWritable);
+        error!("paMax: {:?}", conf.paMax);
+
+        Ok(Self {
+            handle: Arc::new(Mutex::new(handle)),
+            metadata: PhysicalMemoryMetadata {
+                size: conf.paMax as usize,
+                readonly: if conf.fVolatile == 0 { true } else { false },
+                // TODO: writable
+            },
+        })
     }
 }
 
 impl PhysicalMemory for PciLeech {
     fn phys_read_raw_list(&mut self, data: &mut [PhysicalReadData]) -> Result<()> {
+        let handle = self.handle.lock().unwrap();
+
         // TODO: everything apart from 0x1000 byte buffers crashes...
         for read in data.iter_mut() {
             // TODO: ensure reading just 1 page...
@@ -80,7 +97,7 @@ impl PhysicalMemory for PciLeech {
                 let aligned = read.0.address().as_page_aligned(0x1000);
                 unsafe {
                     LcRead(
-                        self.handle,
+                        *handle,
                         aligned.as_u64(),
                         page.len() as u32,
                         page.as_mut_ptr(),
@@ -93,7 +110,7 @@ impl PhysicalMemory for PciLeech {
                 // TODO: handle page alignment
                 unsafe {
                     LcRead(
-                        self.handle,
+                        *handle,
                         read.0.as_u64(),
                         read.1.len() as u32,
                         read.1.as_mut_ptr(),
@@ -105,11 +122,13 @@ impl PhysicalMemory for PciLeech {
     }
 
     fn phys_write_raw_list(&mut self, data: &[PhysicalWriteData]) -> Result<()> {
+        let handle = self.handle.lock().unwrap();
+
         // TODO: everything apart from 0x1000 byte buffers crashes...
         unsafe {
             for write in data.iter() {
                 LcWrite(
-                    self.handle,
+                    *handle,
                     write.0.as_u64(),
                     write.1.len() as u32,
                     write.1.as_ptr() as *mut u8,
@@ -152,10 +171,7 @@ impl PhysicalMemory for PciLeech {
     }
 
     fn metadata(&self) -> PhysicalMemoryMetadata {
-        PhysicalMemoryMetadata {
-            size: size::gb(16), // TODO:
-            readonly: false,
-        }
+        self.metadata.clone()
     }
 }
 
