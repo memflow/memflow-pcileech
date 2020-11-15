@@ -1,0 +1,40 @@
+[package]
+name = "memflow-pcileech"
+version = "0.1.0"
+authors = ["ko1N <ko1N1337@gmail.com>"]
+edition = "2018"
+description = "qemu procfs connector for leechcore/pcileech"
+documentation = "https://docs.rs/memflow-pcileech"
+readme = "../README.md"
+homepage = "https://memflow.github.io"
+repository = "https://github.com/memflow/memflow-pcileech"
+license-file = "../LICENSE"
+keywords = [ "memflow", "introspection", "memory" ]
+categories = [ "api-bindings", "memory-management", "os" ]
+
+[lib]
+crate-type = ["lib", "cdylib"]
+
+[dependencies]
+memflow = { version = "0.1", features = ["inventory"] }
+memflow-derive = { version = "0.1" }
+log = { version = "0.4", default-features = false }
+leechcore-sys = { path = "../leechcore-sys" }
+
+# test
+libc = "0.2"
+
+[dev-dependencies]
+clap = "2.33"
+simple_logger = "1.0"
+
+[profile.release]
+lto = true
+
+[features]
+default = []
+inventory = []
+
+[[example]]
+name = "read_phys"
+path = "examples/read_phys.rs"

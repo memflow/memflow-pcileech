@@ -1,0 +1,3 @@
+[submodule "leechcore-sys/src/leechcore"]
+	path = leechcore-sys/src/leechcore
+	url = https://github.com/ufrisk/LeechCore
