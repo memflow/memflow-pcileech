@@ -11,6 +11,12 @@ More information about pcileech can be found under https://github.com/ufrisk/pci
 
 This project uses libusb to interface with the ftdi chip over usb. Make sure you have the appropiate headers installed. More information about the libusb implementation can be found in the https://github.com/a1ien/rusb project.
 
+### Using the install script
+
+The `./install.sh` script will just compile and install the plugin.
+The connector will be installed to `~/.local/lib/memflow` by default.
+Additionally the `--system` flag can be specified which will install the connector in /usr/lib/memflow as well.
+
 ### Using the library in a rust project
 
 To use the plugin in a rust project just include it in your Cargo.toml
