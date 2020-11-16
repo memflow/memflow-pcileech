@@ -1,11 +1,8 @@
 // https://github.com/ufrisk/pcileech/blob/master/pcileech/device.c
 
-use std::ffi::CString;
 use std::os::raw::c_char;
-use std::sync::Arc;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
-use libc::malloc;
 use log::{error, info, warn};
 
 use memflow::*;
@@ -69,10 +66,6 @@ impl PciLeech {
             return Err(Error::Connector("unable to create leechcore context"));
         }
 
-        error!("fVolatile: {:?}", conf.fVolatile);
-        error!("fWritable: {:?}", conf.fWritable);
-        error!("paMax: {:?}", conf.paMax);
-
         Ok(Self {
             handle: Arc::new(Mutex::new(handle)),
             metadata: PhysicalMemoryMetadata {
@@ -88,34 +81,58 @@ impl PhysicalMemory for PciLeech {
     fn phys_read_raw_list(&mut self, data: &mut [PhysicalReadData]) -> Result<()> {
         let handle = self.handle.lock().unwrap();
 
-        // TODO: everything apart from 0x1000 byte buffers crashes...
         for read in data.iter_mut() {
-            // TODO: ensure reading just 1 page...
-            // TODO: handle page boundaries
-            if read.1.len() < 0x1000 {
-                let mut page = [0u8; 0x1000];
-                let aligned = read.0.address().as_page_aligned(0x1000);
+            let aligned_address = read.0.address().as_page_aligned(0x1000);
+            if read.0.address() == aligned_address {
+                if read.1.len() < 0x1000 {
+                    // small aligned read (create a 0x1000 byte buffer and copy it to the result)
+                    let mut page = [0u8; 0x1000];
+                    unsafe {
+                        LcRead(
+                            *handle,
+                            read.0.address().as_u64(),
+                            page.len() as u32,
+                            page.as_mut_ptr(),
+                        )
+                    };
+                    read.1.copy_from_slice(&page[..read.1.len()]);
+                } else {
+                    // big aligned read
+                    unsafe {
+                        LcRead(
+                            *handle,
+                            read.0.as_u64(),
+                            read.1.len() as u32,
+                            read.1.as_mut_ptr(),
+                        )
+                    };
+                }
+            } else {
+                // unaligned read
+                let offset = (read.0.as_u64() - aligned_address.as_u64()) as usize;
+
+                // do we cross a page boundary?
+                let page_len = if offset + (read.1.len() % 0x1000) <= 0x1000 {
+                    Address::from(offset + read.1.len() + 0x1000)
+                        .as_page_aligned(0x1000)
+                        .as_usize()
+                } else {
+                    Address::from(offset + read.1.len() + 0x2000)
+                        .as_page_aligned(0x1000)
+                        .as_usize()
+                };
+
+                let mut page = vec![0u8; page_len];
                 unsafe {
                     LcRead(
                         *handle,
-                        aligned.as_u64(),
-                        page.len() as u32,
+                        aligned_address.as_u64(),
+                        page_len as u32,
                         page.as_mut_ptr(),
                     )
                 };
-                let offs = (read.0.as_u64() - aligned.as_u64()) as usize;
-                read.1.copy_from_slice(&page[offs..offs + read.1.len()]);
-            } else {
-                // TODO: handle multiple pages at once
-                // TODO: handle page alignment
-                unsafe {
-                    LcRead(
-                        *handle,
-                        read.0.as_u64(),
-                        read.1.len() as u32,
-                        read.1.as_mut_ptr(),
-                    )
-                };
+                read.1
+                    .copy_from_slice(&page[offset..(offset + read.1.len())]);
             }
         }
         Ok(())
