@@ -139,49 +139,42 @@ impl PhysicalMemory for PciLeech {
     }
 
     fn phys_write_raw_list(&mut self, data: &[PhysicalWriteData]) -> Result<()> {
-        let handle = self.handle.lock().unwrap();
+        for write in data.iter() {
+            // for now we just assume all writes are un-aligned as we barely ever write big chunks
+            let aligned_address = write.0.address().as_page_aligned(0x1000);
 
-        // TODO: everything apart from 0x1000 byte buffers crashes...
-        unsafe {
-            for write in data.iter() {
+            // unaligned read
+            let offset = (write.0.as_u64() - aligned_address.as_u64()) as usize;
+
+            // do we cross a page boundary?
+            let page_len = if offset + (write.1.len() % 0x1000) <= 0x1000 {
+                Address::from(offset + write.1.len() + 0x1000)
+                    .as_page_aligned(0x1000)
+                    .as_usize()
+            } else {
+                Address::from(offset + write.1.len() + 0x2000)
+                    .as_page_aligned(0x1000)
+                    .as_usize()
+            };
+
+            // first read in the entire page
+            let mut page = vec![0u8; page_len];
+            self.phys_read_raw_into(aligned_address.into(), &mut page)?;
+
+            // overwrite parts of the page
+            page[offset..(offset + write.1.len())].copy_from_slice(&write.1);
+
+            println!("write at {} with size {}", aligned_address, page.len());
+
+            // write page
+            let handle = self.handle.lock().unwrap();
+            unsafe {
                 LcWrite(
                     *handle,
-                    write.0.as_u64(),
-                    write.1.len() as u32,
-                    write.1.as_ptr() as *mut u8,
+                    aligned_address.as_u64(),
+                    page.len() as u32,
+                    page.as_ptr() as *mut u8,
                 );
-
-                /*
-                // TODO: ensure reading just 1 page...
-                // TODO: handle page boundaries
-                if write.1.len() < 0x1000 {
-                    let mut page = [0u8; 0x1000];
-                    let aligned = write.0.address().as_page_aligned(0x1000);
-                    unsafe {
-                        LcRead(
-                            self.handle,
-                            aligned.as_u64(),
-                            page.len() as u32,
-                            page.as_mut_ptr(),
-                        )
-                    };
-                    let offs = (read.0.as_u64() - aligned.as_u64()) as usize;
-                    read.1.copy_from_slice(
-                        &page[offs..offs+read.1.len()],
-                    );
-                } else {
-                    // TODO: handle multiple pages at once
-                    // TODO: handle page alignment
-                    unsafe {
-                        LcRead(
-                            self.handle,
-                            read.0.as_u64(),
-                            read.1.len() as u32,
-                            read.1.as_mut_ptr(),
-                        )
-                    };
-                }
-                */
             }
         }
         Ok(())
