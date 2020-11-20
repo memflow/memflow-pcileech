@@ -15,29 +15,15 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
+      - name: Install libusb-1.0
+        run: sudo apt-get install libusb-1.0-0-dev
+        if: runner.os != 'Windows'
+
       - name: Build
         run: cargo build --workspace --verbose
-        if: runner.os != 'Windows'
 
       - name: Build examples
         run: cargo build --workspace --examples --verbose
-        if: runner.os != 'Windows'
-
-      - name: Set up Rust nightly
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: nightly
-          override: true
-        if: runner.os == 'Windows'
-
-      - name: Build (nightly)
-        run: cargo +nightly build --workspace --all-features --verbose
-        if: runner.os == 'Windows'
-
-      - name: Build examples (nightly)
-        run: cargo +nightly build --workspace --all-features --examples --verbose
-        if: runner.os == 'Windows'
 
   build-arm:
     runs-on: ubuntu-latest
@@ -48,6 +34,7 @@ jobs:
           toolchain: stable
           target: aarch64-unknown-linux-gnu
           override: true
+      - run: sudo apt-get install libusb-1.0-0-dev  
       - uses: actions-rs/cargo@v1
         with:
           use-cross: true
@@ -62,25 +49,16 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
+      - name: Install libusb-1.0
+        run: sudo apt-get install libusb-1.0-0-dev
+        if: runner.os != 'Windows'
+
       - name: Run all tests
         run: cargo test --workspace --verbose
         if: runner.os == 'Linux'
 
       - name: Run all tests
         run: cargo test --workspace --exclude memflow-derive --verbose
-        if: runner.os == 'macOS'
-
-      - name: Set up Rust nightly
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: nightly
-          override: true
-        if: runner.os == 'Windows'
-
-      - name: Run all tests (nightly)
-        run: cargo +nightly test --workspace --exclude memflow-derive --all-features --verbose
-        if: runner.os == 'Windows'
 
   lint:
     runs-on: ubuntu-latest
