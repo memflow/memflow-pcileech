@@ -2,6 +2,7 @@
 
 use std::ffi::c_void;
 use std::os::raw::c_char;
+use std::ptr;
 use std::slice;
 use std::sync::{Arc, Mutex};
 
@@ -12,10 +13,13 @@ use memflow_derive::connector;
 
 use leechcore_sys::*;
 
-const PAGE_SIZE: u64 = 0x1000u64;
+const PAGE_SIZE: usize = 0x1000usize;
+const BUF_ALIGN: u64 = 4;
+const BUF_MIN_LEN: usize = 8;
+const BUF_LEN_ALIGN: usize = 8;
 
 const fn calc_num_pages(start: u64, size: u64) -> u64 {
-    ((start & (PAGE_SIZE - 1)) + size + (PAGE_SIZE - 1)) >> 12
+    ((start & (PAGE_SIZE as u64 - 1)) + size + (PAGE_SIZE as u64 - 1)) >> 12
 }
 
 fn build_lc_config(device: &str) -> LC_CONFIG {
@@ -95,7 +99,7 @@ impl PciLeech {
 // TODO: handle mem_map
 impl PhysicalMemory for PciLeech {
     fn phys_read_raw_list(&mut self, data: &mut [PhysicalReadData]) -> Result<()> {
-        let mem_map = &self.mem_map;
+        //let mem_map = &self.mem_map;
 
         // get total number of pages
         let num_pages = data.iter().fold(0u64, |acc, read| {
@@ -104,19 +108,44 @@ impl PhysicalMemory for PciLeech {
 
         // allocate scatter buffer
         let mut mems = std::ptr::null_mut::<PMEM_SCATTER>();
-        let result = unsafe { LcAllocScatter1(num_pages as u32, &mut mems as *mut PPMEM_SCATTER) };
+        let result = unsafe {
+            LcAllocScatter2(
+                (num_pages * PAGE_SIZE as u64) as u32,
+                std::ptr::null_mut(),
+                num_pages as u32,
+                &mut mems as *mut PPMEM_SCATTER,
+            )
+        };
         if result != 1 {
             return Err(Error::Connector("unable to allocate scatter buffer"));
         }
 
         // prepare mems
         let mut i = 0usize;
-        for read in data.iter() {
-            let base = read.0.address().as_page_aligned(0x1000).as_u64();
-            let num_pages = calc_num_pages(read.0.as_u64(), read.1.len() as u64);
-            for p in 0..num_pages {
+        for read in data.iter_mut() {
+            for (page_addr, out) in read.1.page_chunks(read.0.into(), PAGE_SIZE) {
                 let mem = unsafe { *mems.offset(i as isize) };
-                unsafe { (*mem).qwA = base + p * 0x1000 };
+
+                let addr_align = page_addr.as_u64() & (BUF_ALIGN - 1);
+                let len_align = out.len() & (BUF_LEN_ALIGN - 1);
+
+                if addr_align == 0 && len_align == 0 && out.len() >= BUF_MIN_LEN {
+                    // properly aligned read
+                    unsafe { (*mem).qwA = page_addr.as_u64() };
+                    unsafe { (*mem).pb = out.as_mut_ptr() };
+                    unsafe { (*mem).cb = out.len() as u32 };
+                } else {
+                    // non-aligned or small read
+                    let mut buffer_len = (out.len() + addr_align as usize).max(BUF_MIN_LEN);
+                    buffer_len += BUF_LEN_ALIGN - (buffer_len & (BUF_LEN_ALIGN - 1));
+
+                    let buffer = vec![0u8; buffer_len].into_boxed_slice();
+
+                    unsafe { (*mem).qwA = page_addr.as_u64() - addr_align };
+                    unsafe { (*mem).pb = Box::into_raw(buffer) as *mut u8 };
+                    unsafe { (*mem).cb = buffer_len as u32 };
+                }
+
                 i += 1;
             }
         }
@@ -129,22 +158,28 @@ impl PhysicalMemory for PciLeech {
             }
         }
 
-        // load reads back into data
-        i = 0;
+        // gather all 'bogus' reads we had to custom-allocate
+        i = 0usize;
         for read in data.iter_mut() {
-            let num_pages = calc_num_pages(read.0.as_u64(), read.1.len() as u64);
+            for (page_addr, out) in read.1.page_chunks(read.0.into(), PAGE_SIZE) {
+                let mem = unsafe { *mems.offset(i as isize) };
 
-            // internally lc will allocate a continuous buffer
-            let mem = unsafe { *mems.offset(i as isize) };
+                let addr_align = page_addr.as_u64() & (BUF_ALIGN - 1);
+                let len_align = out.len() & (BUF_LEN_ALIGN - 1);
 
-            let offset = (read.0.as_u64() - unsafe { (*mem).qwA }) as usize;
-            //println!("offset={}", offset);
+                if addr_align != 0 || len_align != 0 || out.len() < BUF_MIN_LEN {
+                    // take ownership of the buffer again
+                    // and copy buffer into original again
+                    let buffer: Box<[u8]> = unsafe {
+                        Box::from_raw(ptr::slice_from_raw_parts_mut((*mem).pb, (*mem).cb as usize))
+                    };
+                    out.copy_from_slice(
+                        &buffer[addr_align as usize..out.len() + addr_align as usize],
+                    );
+                }
 
-            let page = unsafe { slice::from_raw_parts((*mem).pb, (num_pages * 0x1000) as usize) };
-            read.1
-                .copy_from_slice(&page[offset..(offset + read.1.len())]);
-
-            i += num_pages as usize;
+                i += 1;
+            }
         }
 
         // free temporary buffers
@@ -156,32 +191,76 @@ impl PhysicalMemory for PciLeech {
     }
 
     fn phys_write_raw_list(&mut self, data: &[PhysicalWriteData]) -> Result<()> {
-        /*
-        let mem_map = &self.mem_map;
+        //let mem_map = &self.mem_map;
 
-        let mut void = FnExtend::void();
-        let mut iter = mem_map.map_iter(data.iter().copied().map(<_>::from), &mut void);
+        // get total number of pages
+        let num_pages = data.iter().fold(0u64, |acc, read| {
+            acc + calc_num_pages(read.0.as_u64(), read.1.len() as u64)
+        });
 
-        let handle = self.handle.lock().unwrap();
-
-        let mut elem = iter.next();
-        while let Some(((addr, _), out)) = elem {
-            let result = unsafe {
-                LcWrite(
-                    *handle,
-                    addr.as_u64(),
-                    out.len() as u32,
-                    out.as_ptr() as *mut u8,
-                )
-            };
-            if result != 1 {
-                return Err(Error::Connector("unable to write memory"));
-            }
-            //println!("write({}, {}) = {}", addr.as_u64(), out.len(), result);
-
-            elem = iter.next();
+        // allocate scatter buffer
+        let mut mems = std::ptr::null_mut::<PMEM_SCATTER>();
+        let result = unsafe {
+            LcAllocScatter2(
+                (num_pages * PAGE_SIZE as u64) as u32,
+                std::ptr::null_mut(),
+                num_pages as u32,
+                &mut mems as *mut PPMEM_SCATTER,
+            )
+        };
+        if result != 1 {
+            return Err(Error::Connector("unable to allocate scatter buffer"));
         }
-        */
+
+        // prepare mems
+        let mut i = 0usize;
+        for write in data.iter() {
+            for (page_addr, out) in write.1.page_chunks(write.0.into(), PAGE_SIZE) {
+                let mem = unsafe { *mems.offset(i as isize) };
+
+                let addr_align = page_addr.as_u64() & (BUF_ALIGN - 1);
+                let len_align = out.len() & (BUF_LEN_ALIGN - 1);
+
+                if addr_align == 0 && len_align == 0 && out.len() >= BUF_MIN_LEN {
+                    // properly aligned read
+                    unsafe { (*mem).qwA = page_addr.as_u64() };
+                    unsafe { (*mem).pb = out.as_ptr() as *mut u8 };
+                    unsafe { (*mem).cb = out.len() as u32 };
+                } else {
+                    // non-aligned or small read
+                    let mut buffer_len = (out.len() + addr_align as usize).max(BUF_MIN_LEN);
+                    buffer_len += BUF_LEN_ALIGN - (buffer_len & (BUF_LEN_ALIGN - 1));
+
+                    let mut buffer = vec![0u8; buffer_len].into_boxed_slice();
+
+                    let write_addr = (page_addr.as_u64() - addr_align).into();
+                    self.phys_read_into(write_addr, &mut buffer[..])?;
+
+                    // copy data over
+                    buffer[addr_align as usize..out.len() + addr_align as usize]
+                        .copy_from_slice(out);
+
+                    unsafe { (*mem).qwA = write_addr.as_u64() };
+                    unsafe { (*mem).pb = Box::into_raw(buffer) as *mut u8 };
+                    unsafe { (*mem).cb = buffer_len as u32 };
+                }
+
+                i += 1;
+            }
+        }
+
+        // dispatch write
+        {
+            let handle = self.handle.lock().unwrap();
+            unsafe {
+                LcWriteScatter(*handle, num_pages as u32, mems);
+            }
+        }
+
+        // free temporary buffers
+        unsafe {
+            LcMemFree(mems as *mut c_void);
+        };
 
         Ok(())
     }
