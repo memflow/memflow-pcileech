@@ -21,9 +21,6 @@ memflow-derive = { version = "0.1" }
 log = { version = "0.4", default-features = false }
 leechcore-sys = { path = "../leechcore-sys" }
 
-# test
-libc = "0.2"
-
 [dev-dependencies]
 simple_logger = "1.0"
 

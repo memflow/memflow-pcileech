@@ -45,12 +45,17 @@ Make sure to not enable the `plugin` feature when importing multiple
 connectors in a rust project without using the memflow plugin inventory.
 This might cause duplicated exports being generated in your project.
 
-### Building the stand-alone plugin
+### Building the stand-alone connector for dynamic loading
 
-The stand-alone plugin of this library is feature-gated behind the `plugin` feature.
-To compile a dynamic library as a plugin use the following command:
+The stand-alone connector of this library is feature-gated behind the `inventory` feature.
+To compile a dynamic library for use with the connector inventory use the following command:
 
 ```cargo build --release --all-features```
+
+### Installing the library
+
+Alternatively to manually placing the library in the `PATH` the connector can be installed with the `install.sh` script.
+It will place it inside `~/.local/lib/memflow` directory. Add `~/.local/lib` directory to `PATH` to use the connector in other memflow projects.
 
 ## Arguments
 
@@ -76,7 +81,7 @@ The `real_base` parameter is optional. If it is not set there will be no re-mapp
 
 ## License
 
-Licensed under MIT License, see [LICENSE](LICENSE).
+Licensed under GPL-3.0 License, see [LICENSE](LICENSE).
 
 ### Contribution
 
