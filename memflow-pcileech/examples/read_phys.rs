@@ -22,10 +22,22 @@ fn main() {
     let mut conn = memflow_pcileech::PciLeech::new("FPGA").unwrap();
     info!("conn: {:?}", conn);
 
-    let addr = Address::from(0x1008);
+    let addr = Address::from(0x1000);
     let mut mem = vec![0; 8];
     conn.phys_read_raw_into(addr.into(), &mut mem).unwrap();
     info!("Received memory: {:?}", mem);
+
+    /*
+    // write
+    mem[0] = 123;
+    //mem[5] = 123;
+    conn.phys_write_raw((addr + 5).into(), &mut mem[..1])
+        .unwrap();
+
+    // re-read
+    conn.phys_read_raw_into(addr.into(), &mut mem).unwrap();
+    info!("Received memory: {:?}", mem);
+    */
 
     /*
     let start = Instant::now();

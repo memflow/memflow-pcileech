@@ -1,6 +1,8 @@
 // https://github.com/ufrisk/pcileech/blob/master/pcileech/device.c
 
+use std::ffi::c_void;
 use std::os::raw::c_char;
+use std::slice;
 use std::sync::{Arc, Mutex};
 
 use log::{error, info, warn};
@@ -10,10 +12,15 @@ use memflow_derive::connector;
 
 use leechcore_sys::*;
 
+const PAGE_SIZE: u64 = 0x1000u64;
+
+const fn calc_num_pages(start: u64, size: u64) -> u64 {
+    ((start & (PAGE_SIZE - 1)) + size + (PAGE_SIZE - 1)) >> 12
+}
+
 fn build_lc_config(device: &str) -> LC_CONFIG {
-    let cdevice = unsafe { &*(device.as_bytes() as *const [u8] as *const [i8]) };
+    let cdevice = unsafe { &*(device.as_bytes() as *const [u8] as *const [c_char]) };
     let mut adevice: [c_char; 260] = [0; 260];
-    //    adevice.clone_from_slice(unsafe { &*(cdevice.as_bytes_with_nul() as *const [u8] as *const [i8]) });
     adevice[..device.len().min(260)].copy_from_slice(&cdevice[..device.len().min(260)]);
 
     let cfg = LC_CONFIG {
@@ -39,6 +46,7 @@ fn build_lc_config(device: &str) -> LC_CONFIG {
 pub struct PciLeech {
     handle: Arc<Mutex<HANDLE>>,
     metadata: PhysicalMemoryMetadata,
+    mem_map: MemoryMap<(Address, usize)>,
 }
 
 unsafe impl Send for PciLeech {}
@@ -48,6 +56,7 @@ impl Clone for PciLeech {
         Self {
             handle: self.handle.clone(),
             metadata: self.metadata.clone(),
+            mem_map: self.mem_map.clone(),
         }
     }
 }
@@ -55,6 +64,11 @@ impl Clone for PciLeech {
 // TODO: proper drop + free impl -> LcMemFree(pLcErrorInfo);
 impl PciLeech {
     pub fn new(device: &str) -> Result<Self> {
+        Self::with_map(device, MemoryMap::new())
+    }
+
+    // TODO: load a memory map via the arguments
+    pub fn with_map(device: &str, mem_map: MemoryMap<(Address, usize)>) -> Result<Self> {
         // open device
         let mut conf = build_lc_config(device);
         let err = std::ptr::null_mut::<PLC_CONFIG_ERRORINFO>();
@@ -71,112 +85,104 @@ impl PciLeech {
             metadata: PhysicalMemoryMetadata {
                 size: conf.paMax as usize,
                 readonly: if conf.fVolatile == 0 { true } else { false },
-                // TODO: writable
+                // TODO: writable flag
             },
+            mem_map,
         })
     }
 }
 
+// TODO: handle mem_map
 impl PhysicalMemory for PciLeech {
     fn phys_read_raw_list(&mut self, data: &mut [PhysicalReadData]) -> Result<()> {
-        let handle = self.handle.lock().unwrap();
+        let mem_map = &self.mem_map;
 
-        for read in data.iter_mut() {
-            let aligned_address = read.0.address().as_page_aligned(0x1000);
-            if read.0.address() == aligned_address {
-                if read.1.len() < 0x1000 {
-                    // small aligned read (create a 0x1000 byte buffer and copy it to the result)
-                    let mut page = [0u8; 0x1000];
-                    unsafe {
-                        LcRead(
-                            *handle,
-                            read.0.address().as_u64(),
-                            page.len() as u32,
-                            page.as_mut_ptr(),
-                        )
-                    };
-                    read.1.copy_from_slice(&page[..read.1.len()]);
-                } else {
-                    // big aligned read
-                    unsafe {
-                        LcRead(
-                            *handle,
-                            read.0.as_u64(),
-                            read.1.len() as u32,
-                            read.1.as_mut_ptr(),
-                        )
-                    };
-                }
-            } else {
-                // unaligned read
-                let offset = (read.0.as_u64() - aligned_address.as_u64()) as usize;
+        // get total number of pages
+        let num_pages = data.iter().fold(0u64, |acc, read| {
+            acc + calc_num_pages(read.0.as_u64(), read.1.len() as u64)
+        });
 
-                // do we cross a page boundary?
-                let page_len = if offset + (read.1.len() % 0x1000) <= 0x1000 {
-                    Address::from(offset + read.1.len() + 0x1000)
-                        .as_page_aligned(0x1000)
-                        .as_usize()
-                } else {
-                    Address::from(offset + read.1.len() + 0x2000)
-                        .as_page_aligned(0x1000)
-                        .as_usize()
-                };
+        // allocate scatter buffer
+        let mut mems = std::ptr::null_mut::<PMEM_SCATTER>();
+        let result = unsafe { LcAllocScatter1(num_pages as u32, &mut mems as *mut PPMEM_SCATTER) };
+        if result != 1 {
+            return Err(Error::Connector("unable to allocate scatter buffer"));
+        }
 
-                let mut page = vec![0u8; page_len];
-                unsafe {
-                    LcRead(
-                        *handle,
-                        aligned_address.as_u64(),
-                        page_len as u32,
-                        page.as_mut_ptr(),
-                    )
-                };
-                read.1
-                    .copy_from_slice(&page[offset..(offset + read.1.len())]);
+        // prepare mems
+        let mut i = 0usize;
+        for read in data.iter() {
+            let base = read.0.address().as_page_aligned(0x1000).as_u64();
+            let num_pages = calc_num_pages(read.0.as_u64(), read.1.len() as u64);
+            for p in 0..num_pages {
+                let mem = unsafe { *mems.offset(i as isize) };
+                unsafe { (*mem).qwA = base + p * 0x1000 };
+                i += 1;
             }
         }
+
+        // dispatch read
+        {
+            let handle = self.handle.lock().unwrap();
+            unsafe {
+                LcReadScatter(*handle, num_pages as u32, mems);
+            }
+        }
+
+        // load reads back into data
+        i = 0;
+        for read in data.iter_mut() {
+            let num_pages = calc_num_pages(read.0.as_u64(), read.1.len() as u64);
+
+            // internally lc will allocate a continuous buffer
+            let mem = unsafe { *mems.offset(i as isize) };
+
+            let offset = (read.0.as_u64() - unsafe { (*mem).qwA }) as usize;
+            //println!("offset={}", offset);
+
+            let page = unsafe { slice::from_raw_parts((*mem).pb, (num_pages * 0x1000) as usize) };
+            read.1
+                .copy_from_slice(&page[offset..(offset + read.1.len())]);
+
+            i += num_pages as usize;
+        }
+
+        // free temporary buffers
+        unsafe {
+            LcMemFree(mems as *mut c_void);
+        };
+
         Ok(())
     }
 
     fn phys_write_raw_list(&mut self, data: &[PhysicalWriteData]) -> Result<()> {
-        for write in data.iter() {
-            // for now we just assume all writes are un-aligned as we barely ever write big chunks
-            let aligned_address = write.0.address().as_page_aligned(0x1000);
+        /*
+        let mem_map = &self.mem_map;
 
-            // unaligned read
-            let offset = (write.0.as_u64() - aligned_address.as_u64()) as usize;
+        let mut void = FnExtend::void();
+        let mut iter = mem_map.map_iter(data.iter().copied().map(<_>::from), &mut void);
 
-            // do we cross a page boundary?
-            let page_len = if offset + (write.1.len() % 0x1000) <= 0x1000 {
-                Address::from(offset + write.1.len() + 0x1000)
-                    .as_page_aligned(0x1000)
-                    .as_usize()
-            } else {
-                Address::from(offset + write.1.len() + 0x2000)
-                    .as_page_aligned(0x1000)
-                    .as_usize()
-            };
+        let handle = self.handle.lock().unwrap();
 
-            // first read in the entire page
-            let mut page = vec![0u8; page_len];
-            self.phys_read_raw_into(aligned_address.into(), &mut page)?;
-
-            // overwrite parts of the page
-            page[offset..(offset + write.1.len())].copy_from_slice(&write.1);
-
-            println!("write at {} with size {}", aligned_address, page.len());
-
-            // write page
-            let handle = self.handle.lock().unwrap();
-            unsafe {
+        let mut elem = iter.next();
+        while let Some(((addr, _), out)) = elem {
+            let result = unsafe {
                 LcWrite(
                     *handle,
-                    aligned_address.as_u64(),
-                    page.len() as u32,
-                    page.as_ptr() as *mut u8,
-                );
+                    addr.as_u64(),
+                    out.len() as u32,
+                    out.as_ptr() as *mut u8,
+                )
+            };
+            if result != 1 {
+                return Err(Error::Connector("unable to write memory"));
             }
+            //println!("write({}, {}) = {}", addr.as_u64(), out.len(), result);
+
+            elem = iter.next();
         }
+        */
+
         Ok(())
     }
 
