@@ -9,6 +9,10 @@ More information about pcileech can be found under https://github.com/ufrisk/pci
 
 ## Compilation
 
+- Make sure the git submodule is checked out
+- Make sure gcc, clang, libusb-1.0 are installed (on windows you can use chocolatey)
+- Run `cargo build --release`
+
 This project uses libusb to interface with the ftdi chip over usb. Make sure you have the appropiate headers installed. More information about the libusb implementation can be found in the https://github.com/a1ien/rusb project.
 
 ### Using the install script
