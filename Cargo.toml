@@ -7,3 +7,6 @@ default-members = [
     "leechcore-sys",
     "memflow-pcileech",
 ]
+
+[profile.release]
+lto = true

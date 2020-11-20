@@ -2,11 +2,11 @@
 
 use std::ffi::c_void;
 use std::os::raw::c_char;
+use std::path::Path;
 use std::ptr;
-use std::slice;
 use std::sync::{Arc, Mutex};
 
-use log::{error, info, warn};
+use log::{error, info};
 
 use memflow::*;
 use memflow_derive::connector;
@@ -14,20 +14,19 @@ use memflow_derive::connector;
 use leechcore_sys::*;
 
 const PAGE_SIZE: usize = 0x1000usize;
+
 const BUF_ALIGN: u64 = 4;
 const BUF_MIN_LEN: usize = 8;
 const BUF_LEN_ALIGN: usize = 8;
-
-const fn calc_num_pages(start: u64, size: u64) -> u64 {
-    ((start & (PAGE_SIZE as u64 - 1)) + size + (PAGE_SIZE as u64 - 1)) >> 12
-}
 
 fn build_lc_config(device: &str) -> LC_CONFIG {
     let cdevice = unsafe { &*(device.as_bytes() as *const [u8] as *const [c_char]) };
     let mut adevice: [c_char; 260] = [0; 260];
     adevice[..device.len().min(260)].copy_from_slice(&cdevice[..device.len().min(260)]);
 
-    let cfg = LC_CONFIG {
+    // TODO: copy device + remote
+
+    LC_CONFIG {
         dwVersion: LC_CONFIG_VERSION,
         dwPrintfVerbosity: LC_CONFIG_PRINTF_ENABLED | LC_CONFIG_PRINTF_V | LC_CONFIG_PRINTF_VV,
         szDevice: adevice,
@@ -39,11 +38,11 @@ fn build_lc_config(device: &str) -> LC_CONFIG {
         fRemote: 0,
         fRemoteDisableCompress: 0,
         szDeviceName: [0; 260],
-    };
+    }
+}
 
-    // TODO: copy device + remote
-
-    cfg
+const fn calc_num_pages(start: u64, size: u64) -> u64 {
+    ((start & (PAGE_SIZE as u64 - 1)) + size + (PAGE_SIZE as u64 - 1)) >> 12
 }
 
 #[derive(Debug)]
@@ -59,7 +58,7 @@ impl Clone for PciLeech {
     fn clone(&self) -> Self {
         Self {
             handle: self.handle.clone(),
-            metadata: self.metadata.clone(),
+            metadata: self.metadata,
             mem_map: self.mem_map.clone(),
         }
     }
@@ -68,11 +67,20 @@ impl Clone for PciLeech {
 // TODO: proper drop + free impl -> LcMemFree(pLcErrorInfo);
 impl PciLeech {
     pub fn new(device: &str) -> Result<Self> {
-        Self::with_map(device, MemoryMap::new())
+        Self::with_mapping(device, MemoryMap::new())
     }
 
-    // TODO: load a memory map via the arguments
-    pub fn with_map(device: &str, mem_map: MemoryMap<(Address, usize)>) -> Result<Self> {
+    pub fn with_memmap<P: AsRef<Path>>(device: &str, path: P) -> Result<Self> {
+        info!(
+            "loading memory mappings from file: {}",
+            path.as_ref().to_string_lossy()
+        );
+        let memmap = MemoryMap::open(path)?;
+        info!("{:?}", memmap);
+        Self::with_mapping(device, memmap)
+    }
+
+    fn with_mapping(device: &str, mem_map: MemoryMap<(Address, usize)>) -> Result<Self> {
         // open device
         let mut conf = build_lc_config(device);
         let err = std::ptr::null_mut::<PLC_CONFIG_ERRORINFO>();
@@ -88,7 +96,7 @@ impl PciLeech {
             handle: Arc::new(Mutex::new(handle)),
             metadata: PhysicalMemoryMetadata {
                 size: conf.paMax as usize,
-                readonly: if conf.fVolatile == 0 { true } else { false },
+                readonly: conf.fVolatile == 0,
                 // TODO: writable flag
             },
             mem_map,
@@ -124,7 +132,7 @@ impl PhysicalMemory for PciLeech {
         let mut i = 0usize;
         for read in data.iter_mut() {
             for (page_addr, out) in read.1.page_chunks(read.0.into(), PAGE_SIZE) {
-                let mem = unsafe { *mems.offset(i as isize) };
+                let mem = unsafe { *mems.add(i) };
 
                 let addr_align = page_addr.as_u64() & (BUF_ALIGN - 1);
                 let len_align = out.len() & (BUF_LEN_ALIGN - 1);
@@ -162,7 +170,7 @@ impl PhysicalMemory for PciLeech {
         i = 0usize;
         for read in data.iter_mut() {
             for (page_addr, out) in read.1.page_chunks(read.0.into(), PAGE_SIZE) {
-                let mem = unsafe { *mems.offset(i as isize) };
+                let mem = unsafe { *mems.add(i) };
 
                 let addr_align = page_addr.as_u64() & (BUF_ALIGN - 1);
                 let len_align = out.len() & (BUF_LEN_ALIGN - 1);
@@ -216,7 +224,7 @@ impl PhysicalMemory for PciLeech {
         let mut i = 0usize;
         for write in data.iter() {
             for (page_addr, out) in write.1.page_chunks(write.0.into(), PAGE_SIZE) {
-                let mem = unsafe { *mems.offset(i as isize) };
+                let mem = unsafe { *mems.add(i) };
 
                 let addr_align = page_addr.as_u64() & (BUF_ALIGN - 1);
                 let len_align = out.len() & (BUF_LEN_ALIGN - 1);
@@ -227,6 +235,8 @@ impl PhysicalMemory for PciLeech {
                     unsafe { (*mem).pb = out.as_ptr() as *mut u8 };
                     unsafe { (*mem).cb = out.len() as u32 };
                 } else {
+                    // TODO: dispatch all necessary reads into 1 batch
+
                     // non-aligned or small read
                     let mut buffer_len = (out.len() + addr_align as usize).max(BUF_MIN_LEN);
                     buffer_len += BUF_LEN_ALIGN - (buffer_len & (BUF_LEN_ALIGN - 1));
@@ -257,6 +267,8 @@ impl PhysicalMemory for PciLeech {
             }
         }
 
+        // TODO: unleak memory from Box::into_raw()
+
         // free temporary buffers
         unsafe {
             LcMemFree(mems as *mut c_void);
@@ -266,7 +278,7 @@ impl PhysicalMemory for PciLeech {
     }
 
     fn metadata(&self) -> PhysicalMemoryMetadata {
-        self.metadata.clone()
+        self.metadata
     }
 }
 
@@ -277,5 +289,10 @@ pub fn create_connector(args: &ConnectorArgs) -> Result<PciLeech> {
         .get("device")
         .or_else(|| args.get_default())
         .ok_or(Error::Connector("argument 'device' missing"))?;
-    PciLeech::new(device)
+
+    if let Some(memmap) = args.get("memmap") {
+        PciLeech::with_memmap(device, memmap)
+    } else {
+        PciLeech::new(device)
+    }
 }

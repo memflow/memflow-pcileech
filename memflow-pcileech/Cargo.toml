@@ -16,8 +16,8 @@ categories = [ "api-bindings", "memory-management", "os" ]
 crate-type = ["lib", "cdylib"]
 
 [dependencies]
-memflow = { version = "0.1", features = ["inventory"] }
-memflow-derive = { version = "0.1" }
+memflow = { git = "https://github.com/memflow/memflow", branch = "dev", features = ["inventory", "serde_derive"] }
+memflow-derive = { git = "https://github.com/memflow/memflow", branch = "dev" }
 log = { version = "0.4", default-features = false }
 leechcore-sys = { path = "../leechcore-sys" }
 
@@ -25,11 +25,7 @@ leechcore-sys = { path = "../leechcore-sys" }
 libc = "0.2"
 
 [dev-dependencies]
-clap = "2.33"
 simple_logger = "1.0"
-
-[profile.release]
-lto = true
 
 [features]
 default = []

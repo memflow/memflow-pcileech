@@ -9,11 +9,23 @@ More information about pcileech can be found under https://github.com/ufrisk/pci
 
 ## Compilation
 
-- Make sure the git submodule is checked out
-- Make sure gcc, clang, libusb-1.0 are installed (on windows you can use chocolatey)
-- Run `cargo build --release`
+First make sure that the `leechcore` submodule is checked out:
+```
+git submodule init
+git submodule sync
+git submodule update
+```
 
-This project uses libusb to interface with the ftdi chip over usb. Make sure you have the appropiate headers installed. More information about the libusb implementation can be found in the https://github.com/a1ien/rusb project.
+Install the following build tools:
+- gcc
+- clang
+- libusb-1.0 (only required on linux)
+
+On Windows you additionally need to supply the proprietary FTD3XX.dll.
+
+On Linux you need to check-out and compile the `leechcore_ft601_driver_linux` project from the [LeechCore-Plugins](https://github.com/ufrisk/LeechCore-plugins) repository.
+
+More information about these requirements can be found in the [LeechCore-Plugins](https://github.com/ufrisk/LeechCore-plugins) repository.
 
 ### Using the install script
 
@@ -39,6 +51,28 @@ The stand-alone plugin of this library is feature-gated behind the `plugin` feat
 To compile a dynamic library as a plugin use the following command:
 
 ```cargo build --release --all-features```
+
+## Arguments
+
+The following arguments can be used when loading the connector:
+
+- `device` - the name of the pcileech device to open (e.g. FPGA) (default argument, required)
+- `memmap` - a file that contains a custom memory map in TOML format (optional)
+
+The memory map file must contain a mapping table in the following format:
+
+```toml
+[[range]]
+base=0x1000
+length=0x1000
+
+[[range]]
+base=0x2000
+length=0x1000
+real_base=0x3000
+```
+
+The `real_base` parameter is optional. If it is not set there will be no re-mapping.
 
 ## License
 

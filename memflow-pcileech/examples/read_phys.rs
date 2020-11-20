@@ -1,3 +1,4 @@
+use std::env;
 use std::time::Instant;
 
 use log::{info, Level};
@@ -5,41 +6,27 @@ use log::{info, Level};
 use memflow::*;
 
 fn main() {
-    simple_logger::init_with_level(Level::Debug).unwrap();
-
-    // TODO: parse command-line args
-    /*
-    let mut conn = match memflow_pcileech::create_connector(
-        &ConnectorArgs::parse("name=win10,type=kvm").unwrap(),
-    ) {
-        Ok(br) => br,
-        Err(e) => {
-            info!("couldn't open memory read context: {:?}", e);
-            return;
-        }
-    };
-    */
-    let mut conn = memflow_pcileech::PciLeech::new("FPGA").unwrap();
-    info!("conn: {:?}", conn);
-
-    let addr = Address::from(0x1000);
-    let mut mem = vec![0; 8];
-    conn.phys_read_raw_into(addr.into(), &mut mem).unwrap();
-    info!("Received memory: {:?}", mem);
-
-    /*
-    // write
-    mem[0] = 123;
-    //mem[5] = 123;
-    conn.phys_write_raw((addr + 5).into(), &mut mem[..1])
+    simple_logger::SimpleLogger::new()
+        .with_level(Level::Debug.to_level_filter())
+        .init()
         .unwrap();
 
-    // re-read
+    let args: Vec<String> = env::args().collect();
+    println!("{:?}", args);
+    let conn_args = if args.len() > 1 {
+        ConnectorArgs::parse(&args[1]).expect("unable to parse arguments")
+    } else {
+        ConnectorArgs::new()
+    };
+
+    let mut conn = memflow_pcileech::create_connector(&conn_args)
+        .expect("unable to initialize memflow_pcileech");
+
+    let addr = Address::from(0x1000);
+    let mut mem = vec![0; 16];
     conn.phys_read_raw_into(addr.into(), &mut mem).unwrap();
     info!("Received memory: {:?}", mem);
-    */
 
-    /*
     let start = Instant::now();
     let mut counter = 0;
     loop {
@@ -56,5 +43,4 @@ fn main() {
             }
         }
     }
-    */
 }
