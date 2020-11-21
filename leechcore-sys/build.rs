@@ -43,6 +43,7 @@ fn build_leechcore(target: &str) {
                 .collect::<Vec<_>>(),
         )
         .flag(&format!("-D{}", os_define()));
+    // EXPORTED_FUNCTION= to not export any symbols
 
     if !target.contains("windows") {
         // setup additional flags
