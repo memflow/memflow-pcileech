@@ -3,7 +3,7 @@ use std::time::Instant;
 
 use log::{info, Level};
 
-use memflow::*;
+use memflow::prelude::v1::*;
 
 fn main() {
     simple_logger::SimpleLogger::new()
@@ -19,7 +19,7 @@ fn main() {
         ConnectorArgs::new()
     };
 
-    let mut conn = memflow_pcileech::create_connector(&conn_args)
+    let mut conn = memflow_pcileech::create_connector(Level::Debug, &conn_args)
         .expect("unable to initialize memflow_pcileech");
 
     let addr = Address::from(0x1000);
