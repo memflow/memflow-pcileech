@@ -4,17 +4,15 @@
 #![allow(improper_ctypes)]
 #![allow(clippy::missing_safety_doc)]
 
-//#![allow(clippy::useless_transmute)]
-//#![allow(clippy::cognitive_complexity)]
-
 include!(concat!(env!("OUT_DIR"), "/leechcore.rs"));
+
+#[cfg(target_os = "windows")]
+use ctor::{ctor, dtor};
 
 #[cfg(target_os = "windows")]
 extern "C" {
     pub fn DllMain(_: *const u8, _: u32, _: *const u8) -> u32;
 }
-
-use ctor::{ctor, dtor};
 
 #[ctor]
 #[cfg(target_os = "windows")]
