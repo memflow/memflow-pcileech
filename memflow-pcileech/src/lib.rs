@@ -8,8 +8,8 @@ use std::sync::{Arc, Mutex};
 
 use log::{error, info, Level};
 
-use memflow::prelude::v1::*;
 use memflow::derive::connector;
+use memflow::prelude::v1::*;
 
 use leechcore_sys::*;
 
