@@ -29,7 +29,7 @@ fn main() {
 
     let start = Instant::now();
     let mut counter = 0;
-    for _ in 0..10000 {
+    loop {
         let mut buf = vec![0; 0x1000];
         conn.phys_read_raw_into(Address::from(0x1000).into(), &mut buf)
             .unwrap();
