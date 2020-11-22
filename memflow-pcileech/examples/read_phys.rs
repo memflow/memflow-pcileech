@@ -22,14 +22,14 @@ fn main() {
     let mut conn = memflow_pcileech::create_connector(Level::Debug, &conn_args)
         .expect("unable to initialize memflow_pcileech");
 
-    let addr = Address::from(0x1000);
-    let mut mem = vec![0; 16];
-    conn.phys_read_raw_into(addr.into(), &mut mem).unwrap();
+    let mut mem = vec![0; 8];
+    conn.phys_read_raw_into(Address::from(0x1000).into(), &mut mem)
+        .unwrap();
     info!("Received memory: {:?}", mem);
 
     let start = Instant::now();
     let mut counter = 0;
-    loop {
+    for _ in 0..10000 {
         let mut buf = vec![0; 0x1000];
         conn.phys_read_raw_into(Address::from(0x1000).into(), &mut buf)
             .unwrap();
