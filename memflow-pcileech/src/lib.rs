@@ -4,6 +4,7 @@ use std::ffi::c_void;
 use std::os::raw::c_char;
 use std::path::Path;
 use std::ptr;
+use std::slice;
 use std::sync::{Arc, Mutex};
 
 use log::{error, info};
@@ -104,6 +105,23 @@ impl PciLeech {
     }
 }
 
+struct ReadGap {
+    gap_buffer: *mut u8,
+    gap_buffer_len: usize,
+    out_buffer: *mut u8,
+    out_start: usize,
+    out_end: usize,
+}
+
+struct WriteGap {
+    gap_addr: PhysicalAddress,
+    gap_buffer: *mut u8,
+    gap_buffer_len: usize,
+    in_buffer: *const u8,
+    in_start: usize,
+    in_end: usize,
+}
+
 // TODO: handle mem_map
 impl PhysicalMemory for PciLeech {
     fn phys_read_raw_list(&mut self, data: &mut [PhysicalReadData]) -> Result<()> {
@@ -129,6 +147,7 @@ impl PhysicalMemory for PciLeech {
         }
 
         // prepare mems
+        let mut gaps = Vec::new();
         let mut i = 0usize;
         for read in data.iter_mut() {
             for (page_addr, out) in read.1.page_chunks(read.0.into(), PAGE_SIZE) {
@@ -148,9 +167,18 @@ impl PhysicalMemory for PciLeech {
                     buffer_len += BUF_LEN_ALIGN - (buffer_len & (BUF_LEN_ALIGN - 1));
 
                     let buffer = vec![0u8; buffer_len].into_boxed_slice();
+                    let buffer_ptr = Box::into_raw(buffer) as *mut u8;
+
+                    gaps.push(ReadGap {
+                        gap_buffer: buffer_ptr,
+                        gap_buffer_len: buffer_len,
+                        out_buffer: out.as_mut_ptr(),
+                        out_start: addr_align as usize,
+                        out_end: out.len() + addr_align as usize,
+                    });
 
                     unsafe { (*mem).qwA = page_addr.as_u64() - addr_align };
-                    unsafe { (*mem).pb = Box::into_raw(buffer) as *mut u8 };
+                    unsafe { (*mem).pb = buffer_ptr };
                     unsafe { (*mem).cb = buffer_len as u32 };
                 }
 
@@ -167,26 +195,21 @@ impl PhysicalMemory for PciLeech {
         }
 
         // gather all 'bogus' reads we had to custom-allocate
-        i = 0usize;
-        for read in data.iter_mut() {
-            for (page_addr, out) in read.1.page_chunks(read.0.into(), PAGE_SIZE) {
-                let mem = unsafe { *mems.add(i) };
+        if !gaps.is_empty() {
+            for gap in gaps.iter() {
+                let buffer: Box<[u8]> = unsafe {
+                    Box::from_raw(ptr::slice_from_raw_parts_mut(
+                        gap.gap_buffer,
+                        gap.gap_buffer_len,
+                    ))
+                };
 
-                let addr_align = page_addr.as_u64() & (BUF_ALIGN - 1);
-                let len_align = out.len() & (BUF_LEN_ALIGN - 1);
+                let out_buffer = unsafe {
+                    slice::from_raw_parts_mut(gap.out_buffer, gap.out_end - gap.out_start)
+                };
+                out_buffer.copy_from_slice(&buffer[gap.out_start..gap.out_end]);
 
-                if addr_align != 0 || len_align != 0 || out.len() < BUF_MIN_LEN {
-                    // take ownership of the buffer again
-                    // and copy buffer into original again
-                    let buffer: Box<[u8]> = unsafe {
-                        Box::from_raw(ptr::slice_from_raw_parts_mut((*mem).pb, (*mem).cb as usize))
-                    };
-                    out.copy_from_slice(
-                        &buffer[addr_align as usize..out.len() + addr_align as usize],
-                    );
-                }
-
-                i += 1;
+                // drop buffer
             }
         }
 
@@ -221,6 +244,7 @@ impl PhysicalMemory for PciLeech {
         }
 
         // prepare mems
+        let mut gaps = Vec::new();
         let mut i = 0usize;
         for write in data.iter() {
             for (page_addr, out) in write.1.page_chunks(write.0.into(), PAGE_SIZE) {
@@ -235,27 +259,52 @@ impl PhysicalMemory for PciLeech {
                     unsafe { (*mem).pb = out.as_ptr() as *mut u8 };
                     unsafe { (*mem).cb = out.len() as u32 };
                 } else {
-                    // TODO: dispatch all necessary reads into 1 batch
-
                     // non-aligned or small read
                     let mut buffer_len = (out.len() + addr_align as usize).max(BUF_MIN_LEN);
                     buffer_len += BUF_LEN_ALIGN - (buffer_len & (BUF_LEN_ALIGN - 1));
 
-                    let mut buffer = vec![0u8; buffer_len].into_boxed_slice();
-
+                    // prepare gap buffer for reading
                     let write_addr = (page_addr.as_u64() - addr_align).into();
-                    self.phys_read_into(write_addr, &mut buffer[..])?;
+                    let buffer = vec![0u8; buffer_len].into_boxed_slice();
+                    let buffer_ptr = Box::into_raw(buffer) as *mut u8;
 
-                    // copy data over
-                    buffer[addr_align as usize..out.len() + addr_align as usize]
-                        .copy_from_slice(out);
+                    // send over to our gaps list
+                    gaps.push(WriteGap {
+                        gap_addr: write_addr,
+                        gap_buffer: buffer_ptr,
+                        gap_buffer_len: buffer_len,
+                        in_buffer: out.as_ptr(),
+                        in_start: addr_align as usize,
+                        in_end: out.len() + addr_align as usize,
+                    });
 
+                    // store pointers into pcileech struct for writing (after we dispatched a read)
                     unsafe { (*mem).qwA = write_addr.as_u64() };
-                    unsafe { (*mem).pb = Box::into_raw(buffer) as *mut u8 };
+                    unsafe { (*mem).pb = buffer_ptr };
                     unsafe { (*mem).cb = buffer_len as u32 };
                 }
 
                 i += 1;
+            }
+        }
+
+        // dispatch necessary reads to fill the gaps
+        if !gaps.is_empty() {
+            let mut datas = gaps
+                .iter()
+                .map(|g| {
+                    PhysicalReadData(g.gap_addr, unsafe {
+                        slice::from_raw_parts_mut(g.gap_buffer, g.gap_buffer_len)
+                    })
+                })
+                .collect::<Vec<_>>();
+
+            self.phys_read_raw_list(datas.as_mut_slice())?;
+
+            for (gap, read) in gaps.iter().zip(datas) {
+                let in_buffer =
+                    unsafe { slice::from_raw_parts(gap.in_buffer, gap.in_end - gap.in_start) };
+                read.1[gap.in_start..gap.in_end].copy_from_slice(in_buffer);
             }
         }
 
@@ -267,7 +316,12 @@ impl PhysicalMemory for PciLeech {
             }
         }
 
-        // TODO: unleak memory from Box::into_raw()
+        if !gaps.is_empty() {
+            for gap in gaps.iter() {
+                let _ = unsafe { Box::from_raw(gap.gap_buffer) };
+                // drop buffer
+            }
+        }
 
         // free temporary buffers
         unsafe {
