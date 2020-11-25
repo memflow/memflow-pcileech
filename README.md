@@ -38,7 +38,7 @@ Additionally the `--system` flag can be specified which will install the connect
 To use the plugin in a rust project just include it in your Cargo.toml
 
 ```
-memflow-pcileech = "0.1"
+memflow-pcileech = { git = "https://github.com/memflow/memflow-pcileech", branch = "master" }
 ```
 
 Make sure to not enable the `plugin` feature when importing multiple
