@@ -12,7 +12,6 @@ fn main() {
         .unwrap();
 
     let args: Vec<String> = env::args().collect();
-    println!("{:?}", args);
     let conn_args = if args.len() > 1 {
         ConnectorArgs::parse(&args[1]).expect("unable to parse arguments")
     } else {
