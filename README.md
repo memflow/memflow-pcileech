@@ -19,7 +19,7 @@ Install the following build tools:
 - clang
 - libusb-1.0 (only required on linux)
 
-On Windows you additionally need to supply the proprietary FTD3XX.dll.
+On Windows you additionally need to supply the proprietary `FTD3XX.dll`. It can be downloaded from the [FTDI Website](https://www.ftdichip.com/Drivers/D3XX.htm) in the `Application Library (DLL)` column.
 
 On Linux you need to check-out and compile the `leechcore_ft601_driver_linux` project from the [LeechCore-Plugins](https://github.com/ufrisk/LeechCore-plugins) repository.
 
