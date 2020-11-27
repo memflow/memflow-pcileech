@@ -18,7 +18,7 @@ fn main() {
         ConnectorArgs::new()
     };
 
-    let mut conn = memflow_pcileech::create_connector(&conn_args)
+    let mut conn = memflow_pcileech::create_connector(Level::Debug, &conn_args)
         .expect("unable to initialize memflow_pcileech");
 
     let mut mem = vec![0; 8];

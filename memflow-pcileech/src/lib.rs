@@ -7,10 +7,10 @@ use std::ptr;
 use std::slice;
 use std::sync::{Arc, Mutex};
 
-use log::{error, info};
+use log::{error, info, Level};
 
-use memflow::prelude::v1::*;
 use memflow::derive::connector;
+use memflow::prelude::v1::*;
 
 use leechcore_sys::*;
 
@@ -339,7 +339,12 @@ impl PhysicalMemory for PciLeech {
 
 /// Creates a new PciLeech Connector instance.
 #[connector(name = "pcileech", ty = "PciLeech")]
-pub fn create_connector(args: &ConnectorArgs) -> Result<PciLeech> {
+pub fn create_connector(log_level: Level, args: &ConnectorArgs) -> Result<PciLeech> {
+    simple_logger::SimpleLogger::new()
+        .with_level(log_level.to_level_filter())
+        .init()
+        .ok();
+
     let device = args
         .get("device")
         .or_else(|| args.get_default())
