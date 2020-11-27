@@ -9,8 +9,8 @@ use std::sync::{Arc, Mutex};
 
 use log::{error, info};
 
-use memflow::*;
-use memflow_derive::connector;
+use memflow::prelude::v1::*;
+use memflow::derive::connector;
 
 use leechcore_sys::*;
 
@@ -66,6 +66,7 @@ impl Clone for PciLeech {
 }
 
 // TODO: proper drop + free impl -> LcMemFree(pLcErrorInfo);
+#[allow(clippy::mutex_atomic)]
 impl PciLeech {
     pub fn new(device: &str) -> Result<Self> {
         Self::with_mapping(device, MemoryMap::new())
@@ -337,7 +338,7 @@ impl PhysicalMemory for PciLeech {
 }
 
 /// Creates a new PciLeech Connector instance.
-#[connector(name = "pcileech")]
+#[connector(name = "pcileech", ty = " PciLeech")]
 pub fn create_connector(args: &ConnectorArgs) -> Result<PciLeech> {
     let device = args
         .get("device")
