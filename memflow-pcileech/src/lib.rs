@@ -338,7 +338,7 @@ impl PhysicalMemory for PciLeech {
 }
 
 /// Creates a new PciLeech Connector instance.
-#[connector(name = "pcileech", ty = " PciLeech")]
+#[connector(name = "pcileech", ty = "PciLeech")]
 pub fn create_connector(args: &ConnectorArgs) -> Result<PciLeech> {
     let device = args
         .get("device")
