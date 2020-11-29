@@ -105,6 +105,12 @@ real_base=0x3000
 
 The `real_base` parameter is optional. If it is not set there will be no re-mapping.
 
+## Troubleshooting
+
+Q: The plugin is not detected/found by memflow
+
+A: Make sure to compile the plugin with the correct flags. More information can be found in the (usage)[#using-the-library-in-a-rust-project] section.
+
 ## License
 
 Licensed under GPL-3.0 License, see [LICENSE](LICENSE).
