@@ -109,7 +109,7 @@ The `real_base` parameter is optional. If it is not set there will be no re-mapp
 
 Q: The plugin is not detected/found by memflow
 
-A: Make sure to compile the plugin with the correct flags. More information can be found in the (usage)[#using-the-library-in-a-rust-project] section.
+A: Make sure to compile the plugin with the correct flags. See the [usage section](#using-the-library-in-a-rust-project) for more information.
 
 ## License
 
