@@ -11,6 +11,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v2
+        with:
+          submodules: 'true'
       - name: build
         run: cargo build --workspace --verbose
       - name: run tests
@@ -22,6 +24,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+        with:
+          submodules: 'true'
       - name: install libusb-1.0
         run: sudo apt-get install libusb-1.0-0-dev
       - name: build
@@ -35,6 +39,8 @@ jobs:
     runs-on: macOS-10.14
     steps:
       - uses: actions/checkout@v2
+        with:
+          submodules: 'true'
       - uses: keepitsimpletech/actions/setup-macports@setup-macports/releases/v1
       - name: install libusb-1.0
         run: sudo port -vs install libusb libusb-devel
@@ -49,6 +55,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+        with:
+          submodules: 'true'
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
@@ -65,6 +73,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+        with:
+          submodules: 'true'
       - run: rustup component add clippy
       - name: check formatting
         run: cargo fmt -- --check
@@ -77,6 +87,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+        with:
+          submodules: 'true'
       - name: setup rust nightly
         uses: actions-rs/toolchain@v1
         with:
