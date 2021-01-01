@@ -9,6 +9,7 @@ jobs:
 
   build-windows:
     runs-on: windows-latest
+    compiler: clang
     steps:
       - uses: actions/checkout@v2
         with:
