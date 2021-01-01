@@ -16,6 +16,11 @@ fn os_define() -> &'static str {
     "LINUX"
 }
 
+#[cfg(target_os = "macos")]
+fn os_define() -> &'static str {
+    "LINUX"
+}
+
 fn build_leechcore(target: &str) {
     let mut files = vec![
         "oscompatibility.c",
