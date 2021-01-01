@@ -14,9 +14,9 @@ jobs:
         with:
           submodules: 'true'
       - name: install libclang
-        run: |
-          curl -Ls -o "LLVM-10.0.0-win64.exe" "https://github.com/llvm/llvm-project/releases/download/llvmorg-10.0.0/LLVM-10.0.0-win64.exe"
-          LLVM-10.0.0-win64.exe /S
+        uses: crazy-max/ghaction-chocolatey@master
+        with:
+          args: install llvm
       - name: build
         run: cargo build --workspace --verbose
       - name: run tests
