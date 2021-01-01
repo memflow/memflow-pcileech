@@ -32,7 +32,7 @@ jobs:
         run: cargo build --workspace --examples --verbose
 
   build-macos:
-    runs-on: macos-latest
+    runs-on: macOS-10.14
     steps:
       - uses: actions/checkout@v2
       - uses: keepitsimpletech/actions/setup-macports@setup-macports/releases/v1
