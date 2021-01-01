@@ -7,25 +7,45 @@ env:
 
 jobs:
 
-  build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [macos-latest, ubuntu-latest, windows-latest]
+  build-windows:
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v2
-
-      - name: Install libusb-1.0
-        run: sudo apt-get install libusb-1.0-0-dev
-        if: runner.os != 'Windows'
-
-      - name: Build
+      - name: build
         run: cargo build --workspace --verbose
-
-      - name: Build examples
+      - name: run tests
+        run: cargo test --workspace --verbose
+      - name: build examples
         run: cargo build --workspace --examples --verbose
 
-  build-arm:
+  build-ubuntu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: install libusb-1.0
+        run: sudo apt-get install libusb-1.0-0-dev
+      - name: build
+        run: cargo build --workspace --verbose
+      - name: run tests
+        run: cargo test --workspace --verbose
+      - name: build examples
+        run: cargo build --workspace --examples --verbose
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: keepitsimpletech/actions/setup-macports@setup-macports/releases/v1
+      - name: install libusb-1.0
+        run: sudo port -vs install libusb libusb-devel
+      - name: build
+        run: cargo build --workspace --verbose
+      - name: run tests
+        run: cargo test --workspace --verbose
+      - name: build examples
+        run: cargo build --workspace --examples --verbose
+
+  build-ubuntu-aarch64:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -40,32 +60,13 @@ jobs:
           use-cross: true
           command: build
           args: --target aarch64-unknown-linux-gnu --workspace --verbose
-          
-  test:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [macos-latest, ubuntu-latest, windows-latest]
-    steps:
-      - uses: actions/checkout@v2
-
-      - name: Install libusb-1.0
-        run: sudo apt-get install libusb-1.0-0-dev
-        if: runner.os != 'Windows'
-
-      - name: Run all tests
-        run: cargo test --workspace --verbose
-        if: runner.os == 'Linux'
-
-      - name: Run all tests
-        run: cargo test --workspace --exclude memflow-derive --verbose
 
   lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - run: rustup component add clippy
-      - name: Check formatting
+      - name: check formatting
         run: cargo fmt -- --check
       - uses: actions-rs/clippy-check@v1
         with:
@@ -76,14 +77,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - name: Set up Rust nightly
+      - name: setup rust nightly
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: nightly
           override: true
       - run: cargo install grcov
-      - name: Run tests with coverage
+      - name: run tests with coverage
         run: |
           export CARGO_INCREMENTAL=0
           export RUSTFLAGS="-Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort"
