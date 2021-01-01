@@ -14,9 +14,9 @@ jobs:
         with:
           submodules: 'true'
       - name: install libclang
-        uses: crazy-max/ghaction-chocolatey@v1
-        with:
-          args: install llvm
+        run: |
+          curl -Ls -o "LLVM-10.0.0-win64.exe" "https://github.com/llvm/llvm-project/releases/download/llvmorg-10.0.0/LLVM-10.0.0-win64.exe"
+          LLVM-10.0.0-win64.exe /S
       - name: build
         run: cargo build --workspace --verbose
       - name: run tests
@@ -68,28 +68,3 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           args: --all-targets
-
-  build-coverage:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          submodules: 'true'
-      - name: install libusb-1.0
-        run: sudo apt-get install libusb-1.0-0-dev
-      - name: setup rust nightly
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: nightly
-          override: true
-      - run: cargo install grcov
-      - name: run tests with coverage
-        run: |
-          export CARGO_INCREMENTAL=0
-          export RUSTFLAGS="-Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort"
-          export RUSTDOCFLAGS="-Cpanic=abort"
-          cargo build --workspace --exclude memflow-derive
-          cargo test --workspace --exclude memflow-derive
-          grcov ./target/debug/ -s . -t lcov --llvm --branch --ignore-not-existing -o ./target/debug/coverage
-          bash <(curl -s https://codecov.io/bash) -f ./target/debug/coverage -t ${{ secrets.CODECOV_TOKEN }};
