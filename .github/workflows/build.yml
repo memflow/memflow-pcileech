@@ -17,9 +17,6 @@ jobs:
         uses: crazy-max/ghaction-chocolatey@master
         with:
           args: install llvm
-      - name: add clang path to $PATH env
-        shell: bash
-        run: echo "PATH=$PATH:C:\msys64\mingw32\bin" >> $GITHUB_ENV
       - name: build
         shell: bash
         run: cargo build --workspace --verbose
