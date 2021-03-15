@@ -1,5 +1,3 @@
-# This repository is currently work-in-progress and might not fully work.
-
 # memflow-pcileech
 
 This connector implements a rust-native implementation of the pcileech interface.

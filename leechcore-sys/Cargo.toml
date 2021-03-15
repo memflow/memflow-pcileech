@@ -12,6 +12,6 @@ links = "leechcore"
 ctor = "0.1"
 
 [build-dependencies]
-cc = "1.0.62"
-bindgen = "0.55"
+cc = "1.0"
+bindgen = "0.56"
 pkg-config = "0.3"
