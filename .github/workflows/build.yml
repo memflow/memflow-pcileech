@@ -8,7 +8,7 @@ env:
 jobs:
 
   build_ubuntu_x86-64:
-  name: Build for ubuntu-latest (x86-64)
+    name: Build for ubuntu-latest (x86-64)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
