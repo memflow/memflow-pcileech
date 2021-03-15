@@ -17,7 +17,7 @@ Install the following build tools:
 - clang
 - libusb-1.0 (only required on linux)
 
-Make sure that libclang can be found by either adding it to your `PATH` or via the `LIBCLANG_PATH=` environment variable.
+Make sure that libclang can be found by either adding it to your `PATH` or via the `LIBCLANG_PATH` environment variable.
 
 On Windows you additionally need to supply the proprietary `FTD3XX.dll`. It can be downloaded from the [FTDI Website](https://www.ftdichip.com/Drivers/D3XX.htm) in the `Application Library (DLL)` column.
 

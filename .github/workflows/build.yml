@@ -7,7 +7,24 @@ env:
 
 jobs:
 
-  build-windows:
+  build_ubuntu_x86-64:
+  name: Build for ubuntu-latest (x86-64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: 'true'
+      - name: install libusb-1.0
+        run: sudo apt-get install libusb-1.0-0-dev
+      - name: build
+        run: cargo build --workspace --all-features --verbose
+      - name: run tests
+        run: cargo test --workspace --verbose
+      - name: build examples
+        run: cargo build --workspace --all-features --examples --verbose
+
+  build_windows_x86-64:
+    name: Build for windows-latest (x86-64)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v2
@@ -22,28 +39,13 @@ jobs:
         run: echo "LIBCLANG_PATH=$((gcm clang).source -replace "clang.exe")" >> $env:GITHUB_ENV
       - name: build
         shell: bash
-        run: cargo build --workspace --verbose
+        run: cargo build --workspace --all-features --verbose
       - name: run tests
         shell: bash
         run: cargo test --workspace --verbose
       - name: build examples
         shell: bash
-        run: cargo build --workspace --examples --verbose
-
-  build-ubuntu:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          submodules: 'true'
-      - name: install libusb-1.0
-        run: sudo apt-get install libusb-1.0-0-dev
-      - name: build
-        run: cargo build --workspace --verbose
-      - name: run tests
-        run: cargo test --workspace --verbose
-      - name: build examples
-        run: cargo build --workspace --examples --verbose
+        run: cargo build --workspace --all-features --examples --verbose
 
   lint:
     runs-on: ubuntu-latest

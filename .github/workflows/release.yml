@@ -1,0 +1,81 @@
+name: Release binaries
+
+on:
+  release:
+    types: [created]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+
+  build_ubuntu_x86-64:
+    name: Build artifacts for ubuntu-latest (x86-64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: 'true'
+      - name: install libusb-1.0
+        run: sudo apt-get install libusb-1.0-0-dev
+      - name: build
+        run: cargo build --workspace --all-features --verbose
+      - uses: actions/upload-artifact@v2
+        with:
+          name: library-ubuntu
+          path: target/release/*.so
+
+  build_windows_x86-64:
+    name: Build artifacts for windows-latest (x86-64)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: 'true'
+      - name: install llvm and clang
+        uses: KyleMayes/install-llvm-action@v1
+        with:
+          version: "10.0"
+          directory: ${{ runner.temp }}/llvm
+      - name: set LIBCLANG_PATH
+        run: echo "LIBCLANG_PATH=$((gcm clang).source -replace "clang.exe")" >> $env:GITHUB_ENV
+      - name: build
+        shell: bash
+        run: cargo build --workspace --all-features --verbose
+      - uses: actions/upload-artifact@v2
+        with:
+          name: library-windows
+          path: target/release/*.dll
+
+  publish_artifacts:
+    name: Publish artifacts for x86-64/windows-latest
+    runs-on: ubuntu-latest
+    needs: [build_ubuntu_x86-64, build_windows_x86-64, build_macos_x86-64]
+    steps:
+      - uses: actions/download-artifact@v2
+        with:
+          name: library-ubuntu
+      - name: Upload ubuntu artifacts
+        uses: skx/github-action-publish-binaries@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: '*.so'
+      - uses: actions/download-artifact@v2
+        with:
+          name: library-windows
+      - name: Upload windows artifacts
+        uses: skx/github-action-publish-binaries@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: '*.dll'
+      - uses: actions/download-artifact@v2
+        with:
+          name: library-macos
+      - name: Upload macos artifacts
+        uses: skx/github-action-publish-binaries@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: '*.dylib'
