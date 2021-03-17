@@ -57,18 +57,19 @@ jobs:
           name: library-ubuntu
       - name: Create archive for linux x86-64
         run: zip memflow_pcileech_linux_x86-64.zip *.so
-      - name: Upload ubuntu artifacts
+      - name: Upload artifacts for linux x86-64
         uses: skx/github-action-publish-binaries@master
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           args: 'memflow_pcileech_linux_x86-64.zip'
+
       - uses: actions/download-artifact@v2
         with:
           name: library-windows
       - name: Create archive for windows x86-64
         run: zip memflow_pcileech_windows_x86-64.zip *.dll
-      - name: Upload windows artifacts
+      - name: Upload artifacts for windows x86-64
         uses: skx/github-action-publish-binaries@master
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

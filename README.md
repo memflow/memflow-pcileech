@@ -105,6 +105,11 @@ real_base=0x3000
 
 The `real_base` parameter is optional. If it is not set there will be no re-mapping.
 
+On Windows systems the memory map can be obtained from the Registry under the following Key:
+```
+HKEY_LOCAL_MACHINE\\HARDWARE\\RESOURCEMAP\\System Resources\\Physical Memory\\.Translated
+```
+
 ## License
 
 Licensed under GPL-3.0 License, see [LICENSE](LICENSE).
