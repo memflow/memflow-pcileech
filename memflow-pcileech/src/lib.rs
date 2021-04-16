@@ -342,9 +342,8 @@ impl PhysicalMemory for PciLeech {
     }
 
     fn set_mem_map(&mut self, mem_map: MemoryMap<(Address, usize)>) {
-        // TODO: check if current mem_map is empty
-        // TODO: update metadata.size
-        self.mem_map = mem_map;
+        self.metadata.size = mem_map.max_address().as_usize();
+        self.mem_map.merge(mem_map)
     }
 }
 
