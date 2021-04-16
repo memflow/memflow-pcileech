@@ -1,5 +1,3 @@
-# This repository is currently work-in-progress and might not fully work.
-
 # memflow-pcileech
 
 This connector implements a rust-native implementation of the pcileech interface.
@@ -18,6 +16,8 @@ Install the following build tools:
 - gcc
 - clang
 - libusb-1.0 (only required on linux)
+
+Make sure that libclang can be found by either adding it to your `PATH` or via the `LIBCLANG_PATH` environment variable.
 
 On Windows you additionally need to supply the proprietary `FTD3XX.dll`. It can be downloaded from the [FTDI Website](https://www.ftdichip.com/Drivers/D3XX.htm) in the `Application Library (DLL)` column.
 
@@ -104,6 +104,11 @@ real_base=0x3000
 ```
 
 The `real_base` parameter is optional. If it is not set there will be no re-mapping.
+
+On Windows systems the memory map can be obtained from the Registry under the following Key:
+```
+HKEY_LOCAL_MACHINE\\HARDWARE\\RESOURCEMAP\\System Resources\\Physical Memory\\.Translated
+```
 
 ## Troubleshooting
 

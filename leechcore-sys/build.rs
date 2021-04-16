@@ -16,6 +16,11 @@ fn os_define() -> &'static str {
     "LINUX"
 }
 
+#[cfg(target_os = "macos")]
+fn os_define() -> &'static str {
+    "LINUX"
+}
+
 fn build_leechcore(target: &str) {
     let mut files = vec![
         "oscompatibility.c",
@@ -64,7 +69,7 @@ fn build_leechcore(target: &str) {
 
         for flag in String::from_utf8_lossy(&libusb_flags.stdout)
             .trim()
-            .split(" ")
+            .split(' ')
         {
             cfg.flag(flag);
         }
@@ -91,7 +96,7 @@ fn build_leechcore(target: &str) {
     println!("cargo:rustc-link-lib=static=leechcore");
 }
 
-fn main() -> () {
+fn main() {
     let target = env::var("TARGET").unwrap();
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 

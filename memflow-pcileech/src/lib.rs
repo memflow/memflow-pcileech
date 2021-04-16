@@ -46,6 +46,7 @@ const fn calc_num_pages(start: u64, size: u64) -> u64 {
     ((start & (PAGE_SIZE as u64 - 1)) + size + (PAGE_SIZE as u64 - 1)) >> 12
 }
 
+#[allow(clippy::mutex_atomic)]
 #[derive(Debug)]
 pub struct PciLeech {
     handle: Arc<Mutex<HANDLE>>,
@@ -82,6 +83,7 @@ impl PciLeech {
         Self::with_mapping(device, memmap)
     }
 
+    #[allow(clippy::mutex_atomic)]
     fn with_mapping(device: &str, mem_map: MemoryMap<(Address, usize)>) -> Result<Self> {
         // open device
         let mut conf = build_lc_config(device);
