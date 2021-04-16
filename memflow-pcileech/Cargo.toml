@@ -16,10 +16,14 @@ categories = [ "api-bindings", "memory-management", "os" ]
 crate-type = ["lib", "cdylib"]
 
 [dependencies]
-memflow = { git = "https://github.com/memflow/memflow", branch = "next", features = ["inventory", "memmapfiles"] }
+memflow = { git = "https://github.com/memflow/memflow", branch = "next", features = ["plugins", "memmapfiles"] }
 log = { version = "0.4", default-features = false }
 simple_logger = "1.0"
 leechcore-sys = { path = "../leechcore-sys" }
+
+[dev-dependencies]
+clap = "2.33"
+memflow-win32 = { git = "https://github.com/memflow/memflow", branch = "next" }
 
 [features]
 default = []
@@ -28,3 +32,11 @@ inventory = []
 [[example]]
 name = "read_phys"
 path = "examples/read_phys.rs"
+
+[[example]]
+name = "ps_win32"
+path = "examples/ps_win32.rs"
+
+[[example]]
+name = "ps_inventory"
+path = "examples/ps_inventory.rs"

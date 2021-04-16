@@ -93,7 +93,8 @@ impl PciLeech {
             // TODO: handle version error
             // TODO: handle special case of fUserInputRequest
             error!("leechcore error: {:?}", err);
-            return Err(Error::Connector("unable to create leechcore context"));
+            return Err(Error(ErrorOrigin::Connector, ErrorKind::Configuration)
+                .log_error("unable to create leechcore context"));
         }
 
         Ok(Self {
@@ -146,7 +147,8 @@ impl PhysicalMemory for PciLeech {
             )
         };
         if result != 1 {
-            return Err(Error::Connector("unable to allocate scatter buffer"));
+            return Err(Error(ErrorOrigin::Connector, ErrorKind::InvalidMemorySize)
+                .log_error("unable to allocate scatter buffer"));
         }
 
         // prepare mems
@@ -243,7 +245,8 @@ impl PhysicalMemory for PciLeech {
             )
         };
         if result != 1 {
-            return Err(Error::Connector("unable to allocate scatter buffer"));
+            return Err(Error(ErrorOrigin::Connector, ErrorKind::InvalidMemorySize)
+                .log_error("unable to allocate scatter buffer"));
         }
 
         // prepare mems
@@ -337,24 +340,53 @@ impl PhysicalMemory for PciLeech {
     fn metadata(&self) -> PhysicalMemoryMetadata {
         self.metadata
     }
+
+    fn set_mem_map(&mut self, mem_map: MemoryMap<(Address, usize)>) {
+        // TODO: check if current mem_map is empty
+        // TODO: update metadata.size
+        self.mem_map = mem_map;
+    }
 }
 
 /// Creates a new PciLeech Connector instance.
-#[connector(name = "pcileech", ty = "PciLeech")]
-pub fn create_connector(log_level: Level, args: &ConnectorArgs) -> Result<PciLeech> {
+pub fn create_connector(args: &Args, log_level: Level) -> Result<PciLeech> {
     simple_logger::SimpleLogger::new()
         .with_level(log_level.to_level_filter())
         .init()
         .ok();
 
-    let device = args
-        .get("device")
-        .or_else(|| args.get_default())
-        .ok_or(Error::Connector("argument 'device' missing"))?;
+    let validator = ArgsValidator::new()
+        .arg(ArgDescriptor::new("default").description("the target device to be used by LeechCore"))
+        .arg(ArgDescriptor::new("device").description("the target device to be used by LeechCore"))
+        .arg(ArgDescriptor::new("memmap").description("the memory map file of the target machine"));
 
-    if let Some(memmap) = args.get("memmap") {
-        PciLeech::with_memmap(device, memmap)
-    } else {
-        PciLeech::new(device)
+    match validator.validate(&args) {
+        Ok(_) => {
+            let device = args.get("device").or_else(|| args.get_default()).ok_or(
+                Error(ErrorOrigin::Connector, ErrorKind::ArgValidation)
+                    .log_error("'device' argument is missing"),
+            )?;
+
+            if let Some(memmap) = args.get("memmap") {
+                PciLeech::with_memmap(device, memmap)
+            } else {
+                PciLeech::new(device)
+            }
+        }
+        Err(err) => {
+            error!(
+                "unable to validate provided arguments, valid arguments are:\n{}",
+                validator
+            );
+            Err(err)
+        }
     }
+}
+
+/// Creates a new PciLeech Connector instance.
+#[connector(name = "pcileech")]
+pub fn create_connector_instance(args: &Args, log_level: Level) -> Result<ConnectorInstance> {
+    let connector = create_connector(args, log_level)?;
+    let instance = ConnectorInstance::builder(connector).build();
+    Ok(instance)
 }
