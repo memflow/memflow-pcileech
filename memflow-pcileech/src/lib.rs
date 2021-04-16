@@ -92,9 +92,8 @@ impl PciLeech {
         if handle.is_null() {
             // TODO: handle version error
             // TODO: handle special case of fUserInputRequest
-            error!("leechcore error: {:?}", err);
             return Err(Error(ErrorOrigin::Connector, ErrorKind::Configuration)
-                .log_error("unable to create leechcore context"));
+                .log_error(&format!("unable to create leechcore context: {:?}", err)));
         }
 
         Ok(Self {
@@ -361,10 +360,13 @@ pub fn create_connector(args: &Args, log_level: Level) -> Result<PciLeech> {
 
     match validator.validate(&args) {
         Ok(_) => {
-            let device = args.get("device").or_else(|| args.get_default()).ok_or(
-                Error(ErrorOrigin::Connector, ErrorKind::ArgValidation)
-                    .log_error("'device' argument is missing"),
-            )?;
+            let device = args
+                .get("device")
+                .or_else(|| args.get_default())
+                .ok_or_else(|| {
+                    Error(ErrorOrigin::Connector, ErrorKind::ArgValidation)
+                        .log_error("'device' argument is missing")
+                })?;
 
             if let Some(memmap) = args.get("memmap") {
                 PciLeech::with_memmap(device, memmap)

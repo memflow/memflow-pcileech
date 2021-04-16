@@ -47,7 +47,8 @@ fn build_leechcore(target: &str) {
                 .map(|o| "src/leechcore/leechcore/".to_string() + o)
                 .collect::<Vec<_>>(),
         )
-        .flag(&format!("-D{}", os_define()));
+        .flag(&format!("-D{}", os_define()))
+        .flag("-D_GNU_SOURCE");
     // EXPORTED_FUNCTION= to not export any symbols
 
     if !target.contains("windows") {
@@ -105,7 +106,7 @@ fn main() {
 
     // generate bindings
     let mut builder = bindgen::builder()
-        .clang_arg(format!("-D{}", os_define()))
+        .clang_arg(format!("-D{} -D_GNU_SOURCE", os_define()))
         .header("./src/leechcore/leechcore/leechcore.h");
 
     // workaround for windows.h
