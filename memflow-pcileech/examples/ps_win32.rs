@@ -29,7 +29,7 @@ fn main() {
     let connector_args = if let Some(arg) = args().nth(1) {
         Args::parse(arg.as_ref()).expect("unable to parse command line arguments")
     } else {
-        Args::default()
+        Args::new().insert("device", "FPGA")
     };
 
     let connector = memflow_pcileech::create_connector(&connector_args, Level::Debug)

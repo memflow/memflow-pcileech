@@ -3,6 +3,7 @@ This example shows how to use the pcileech connector to read physical_memory
 from a target machine. It also evaluates the number of read cycles per second
 and prints them to stdout.
 */
+use std::env::args;
 use std::time::Instant;
 
 use log::{info, Level};
@@ -15,7 +16,13 @@ fn main() {
         .init()
         .unwrap();
 
-    let mut connector = memflow_pcileech::create_connector(&Args::default(), Level::Debug)
+    let connector_args = if let Some(arg) = args().nth(1) {
+        Args::parse(arg.as_ref()).expect("unable to parse command line arguments")
+    } else {
+        Args::new().insert("device", "FPGA")
+    };
+
+    let mut connector = memflow_pcileech::create_connector(&connector_args, Level::Debug)
         .expect("unable to create pcileech connector");
 
     let metadata = connector.metadata();
