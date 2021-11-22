@@ -1,6 +1,6 @@
 # memflow-pcileech
 
-This connector implements a rust-native implementation of the pcileech interface.
+This connector implements the [LeechCore](https://github.com/ufrisk/LeechCore) interface of pcileech for memflow.
 
 More information about pcileech can be found under https://github.com/ufrisk/pcileech.
 

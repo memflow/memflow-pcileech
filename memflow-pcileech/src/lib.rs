@@ -48,7 +48,7 @@ const fn calc_num_pages(start: u64, size: u64) -> u64 {
 }
 
 #[allow(clippy::mutex_atomic)]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct PciLeech {
     handle: Arc<Mutex<HANDLE>>,
     metadata: PhysicalMemoryMetadata,
@@ -56,16 +56,6 @@ pub struct PciLeech {
 }
 
 unsafe impl Send for PciLeech {}
-
-impl Clone for PciLeech {
-    fn clone(&self) -> Self {
-        Self {
-            handle: self.handle.clone(),
-            metadata: self.metadata,
-            mem_map: self.mem_map.clone(),
-        }
-    }
-}
 
 // TODO: proper drop + free impl -> LcMemFree(pLcErrorInfo);
 #[allow(clippy::mutex_atomic)]

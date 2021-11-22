@@ -32,6 +32,7 @@ fn build_leechcore(target: &str) {
         "device_pmem.c",
         "device_tmd.c",
         "device_usb3380.c",
+        "device_vmware.c",
         "leechrpcclient.c",
     ];
     if target.contains("windows") {
