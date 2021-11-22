@@ -48,11 +48,11 @@ const fn calc_num_pages(start: u64, size: u64) -> u64 {
 }
 
 #[allow(clippy::mutex_atomic)]
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct PciLeech {
     handle: Arc<Mutex<HANDLE>>,
-    metadata: PhysicalMemoryMetadata,
-    mem_map: MemoryMap<(Address, umem)>,
+    conf: LC_CONFIG,
+    mem_map: Option<MemoryMap<(Address, umem)>>,
 }
 
 unsafe impl Send for PciLeech {}
@@ -61,21 +61,21 @@ unsafe impl Send for PciLeech {}
 #[allow(clippy::mutex_atomic)]
 impl PciLeech {
     pub fn new(device: &str) -> Result<Self> {
-        Self::with_mapping(device, MemoryMap::new())
+        Self::new_internal(device, None)
     }
 
-    pub fn with_memmap<P: AsRef<Path>>(device: &str, path: P) -> Result<Self> {
+    pub fn with_mem_map_file<P: AsRef<Path>>(device: &str, path: P) -> Result<Self> {
         info!(
             "loading memory mappings from file: {}",
             path.as_ref().to_string_lossy()
         );
         let mem_map = MemoryMap::open(path)?;
         info!("{:?}", mem_map);
-        Self::with_mapping(device, mem_map)
+        Self::new_internal(device, Some(mem_map))
     }
 
     #[allow(clippy::mutex_atomic)]
-    fn with_mapping(device: &str, mem_map: MemoryMap<(Address, umem)>) -> Result<Self> {
+    fn new_internal(device: &str, mem_map: Option<MemoryMap<(Address, umem)>>) -> Result<Self> {
         // open device
         let mut conf = build_lc_config(device);
         let err = std::ptr::null_mut::<PLC_CONFIG_ERRORINFO>();
@@ -87,16 +87,9 @@ impl PciLeech {
                 .log_error(&format!("unable to create leechcore context: {:?}", err)));
         }
 
-        // TODO: update mem_map max size here instead of setting up metadata from scratch?
-
         Ok(Self {
             handle: Arc::new(Mutex::new(handle)),
-            metadata: PhysicalMemoryMetadata {
-                max_address: (conf.paMax as usize - 1_usize).into(),
-                real_size: conf.paMax as umem,
-                readonly: conf.fVolatile == 0,
-                ideal_batch_size: 128,
-            },
+            conf,
             mem_map,
         })
     }
@@ -126,16 +119,20 @@ impl PhysicalMemory for PciLeech {
         data: CIterator<PhysicalReadData<'a>>,
         out_fail: &mut PhysicalReadFailCallback<'_, 'a>,
     ) -> Result<()> {
-        let mem_map = &self.mem_map;
-
-        let mut callback = &mut |(a, b): (Address, _)| out_fail.call(MemData(a.into(), b));
-        let vec = mem_map
-            .map_iter(data.map(|MemData(addr, buf)| (addr, buf)), &mut callback)
-            .collect::<Vec<_>>();
+        let vec = if let Some(mem_map) = &self.mem_map {
+            let mut callback = &mut |(a, b): (Address, _)| out_fail.call(MemData(a.into(), b));
+            mem_map
+                .map_iter(data.map(|MemData(addr, buf)| (addr, buf)), &mut callback)
+                .map(|d| (d.0 .0.into(), d.1))
+                .collect::<Vec<_>>()
+        } else {
+            data.map(|MemData(addr, buf)| (addr, buf))
+                .collect::<Vec<_>>()
+        };
 
         // get total number of pages
         let num_pages = vec.iter().fold(0u64, |acc, read| {
-            acc + calc_num_pages(read.0 .0.to_umem(), read.1.len() as u64)
+            acc + calc_num_pages(read.0.to_umem(), read.1.len() as u64)
         });
 
         // allocate scatter buffer
@@ -157,7 +154,7 @@ impl PhysicalMemory for PciLeech {
         let mut gaps = Vec::new();
         let mut i = 0usize;
         for read in vec.into_iter() {
-            for (page_addr, out) in read.1.page_chunks(read.0 .0.into(), PAGE_SIZE) {
+            for (page_addr, out) in read.1.page_chunks(read.0.into(), PAGE_SIZE) {
                 let mem = unsafe { *mems.add(i) };
 
                 let addr_align = page_addr.to_umem() & (BUF_ALIGN - 1);
@@ -233,16 +230,20 @@ impl PhysicalMemory for PciLeech {
         data: CIterator<PhysicalWriteData<'a>>,
         out_fail: &mut PhysicalWriteFailCallback<'_, 'a>,
     ) -> Result<()> {
-        let mem_map = &self.mem_map;
-
-        let mut callback = &mut |(a, b): (Address, _)| out_fail.call(MemData(a.into(), b));
-        let vec = mem_map
-            .map_iter(data.map(|MemData(addr, buf)| (addr, buf)), &mut callback)
-            .collect::<Vec<_>>();
+        let vec = if let Some(mem_map) = &self.mem_map {
+            let mut callback = &mut |(a, b): (Address, _)| out_fail.call(MemData(a.into(), b));
+            mem_map
+                .map_iter(data.map(|MemData(addr, buf)| (addr, buf)), &mut callback)
+                .map(|d| (d.0 .0.into(), d.1))
+                .collect::<Vec<_>>()
+        } else {
+            data.map(|MemData(addr, buf)| (addr, buf))
+                .collect::<Vec<_>>()
+        };
 
         // get total number of pages
         let num_pages = vec.iter().fold(0u64, |acc, read| {
-            acc + calc_num_pages(read.0 .0.to_umem(), read.1.len() as u64)
+            acc + calc_num_pages(read.0.to_umem(), read.1.len() as u64)
         });
 
         // allocate scatter buffer
@@ -264,7 +265,7 @@ impl PhysicalMemory for PciLeech {
         let mut gaps = Vec::new();
         let mut i = 0usize;
         for write in vec.iter() {
-            for (page_addr, out) in write.1.page_chunks(write.0 .0.into(), PAGE_SIZE) {
+            for (page_addr, out) in write.1.page_chunks(write.0.into(), PAGE_SIZE) {
                 let mem = unsafe { *mems.add(i) };
 
                 let addr_align = page_addr.to_umem() & (BUF_ALIGN - 1);
@@ -348,16 +349,27 @@ impl PhysicalMemory for PciLeech {
     }
 
     fn metadata(&self) -> PhysicalMemoryMetadata {
-        self.metadata
+        let (max_address, real_size) = if let Some(mem_map) = &self.mem_map {
+            (mem_map.max_address(), mem_map.real_size())
+        } else {
+            (
+                (self.conf.paMax as usize - 1_usize).into(),
+                self.conf.paMax as umem,
+            )
+        };
+        PhysicalMemoryMetadata {
+            max_address,
+            real_size,
+            readonly: self.conf.fVolatile == 0,
+            ideal_batch_size: 128,
+        }
     }
 
+    // Sets the memory map only in cases where no previous memory map was being set by the end-user.
     fn set_mem_map(&mut self, mem_map: &[PhysicalMemoryMapping]) {
-        let map = MemoryMap::<(Address, umem)>::from_vec(mem_map.to_vec());
-        self.mem_map.merge(map);
-
-        // update metadata fields
-        self.metadata.max_address = self.mem_map.max_address();
-        self.metadata.real_size = self.mem_map.real_size();
+        if self.mem_map.is_none() {
+            self.mem_map = Some(MemoryMap::<(Address, umem)>::from_vec(mem_map.to_vec()));
+        }
     }
 }
 
@@ -388,7 +400,7 @@ pub fn create_connector(args: &Args, log_level: Level) -> Result<PciLeech> {
                 })?;
 
             if let Some(memmap) = args.get("memmap") {
-                PciLeech::with_memmap(device, memmap)
+                PciLeech::with_mem_map_file(device, memmap)
             } else {
                 PciLeech::new(device)
             }
