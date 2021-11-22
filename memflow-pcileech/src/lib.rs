@@ -308,17 +308,25 @@ impl PhysicalMemory for PciLeech {
 
         // dispatch necessary reads to fill the gaps
         if !gaps.is_empty() {
-            let iter = gaps.iter().map(|g| {
-                MemData(
-                    g.gap_addr,
-                    unsafe { slice::from_raw_parts_mut(g.gap_buffer, g.gap_buffer_len) }.into(),
-                )
-            });
+            let mut vec = gaps
+                .iter()
+                .map(|g| {
+                    MemData(
+                        g.gap_addr,
+                        unsafe { slice::from_raw_parts_mut(g.gap_buffer, g.gap_buffer_len) }.into(),
+                    )
+                })
+                .collect::<Vec<_>>();
+
+            let mut iter = vec
+                .iter_mut()
+                .map(|MemData(a, d): &mut PhysicalReadData| MemData(*a, d.into()));
 
             let out_fail = &mut |_| true;
-            self.phys_read_raw_iter((&mut iter.clone()).into(), &mut out_fail.into())?;
 
-            for (gap, mut read) in gaps.iter().zip(iter) {
+            self.phys_read_raw_iter((&mut iter).into(), &mut out_fail.into())?;
+
+            for (gap, mut read) in gaps.iter().zip(vec) {
                 let in_buffer =
                     unsafe { slice::from_raw_parts(gap.in_buffer, gap.in_end - gap.in_start) };
                 read.1[gap.in_start..gap.in_end].copy_from_slice(in_buffer);
