@@ -1,5 +1,3 @@
-// https://github.com/ufrisk/pcileech/blob/master/pcileech/device.c
-
 use std::ffi::c_void;
 use std::os::raw::c_char;
 use std::path::Path;
@@ -9,7 +7,8 @@ use std::sync::{Arc, Mutex};
 
 use log::{error, info, Level};
 
-use memflow::derive::connector;
+use memflow::cglue;
+use memflow::mem::phys_mem::*;
 use memflow::prelude::v1::*;
 
 use leechcore_sys::*;
@@ -19,6 +18,8 @@ const PAGE_SIZE: usize = 0x1000usize;
 const BUF_ALIGN: u64 = 4;
 const BUF_MIN_LEN: usize = 8;
 const BUF_LEN_ALIGN: usize = 8;
+
+cglue_impl_group!(PciLeech, ConnectorInstance<'a>, {});
 
 fn build_lc_config(device: &str) -> LC_CONFIG {
     let cdevice = unsafe { &*(device.as_bytes() as *const [u8] as *const [c_char]) };
@@ -51,7 +52,7 @@ const fn calc_num_pages(start: u64, size: u64) -> u64 {
 pub struct PciLeech {
     handle: Arc<Mutex<HANDLE>>,
     metadata: PhysicalMemoryMetadata,
-    mem_map: MemoryMap<(Address, usize)>,
+    mem_map: MemoryMap<(Address, umem)>,
 }
 
 unsafe impl Send for PciLeech {}
@@ -78,13 +79,13 @@ impl PciLeech {
             "loading memory mappings from file: {}",
             path.as_ref().to_string_lossy()
         );
-        let memmap = MemoryMap::open(path)?;
-        info!("{:?}", memmap);
-        Self::with_mapping(device, memmap)
+        let mem_map = MemoryMap::open(path)?;
+        info!("{:?}", mem_map);
+        Self::with_mapping(device, mem_map)
     }
 
     #[allow(clippy::mutex_atomic)]
-    fn with_mapping(device: &str, mem_map: MemoryMap<(Address, usize)>) -> Result<Self> {
+    fn with_mapping(device: &str, mem_map: MemoryMap<(Address, umem)>) -> Result<Self> {
         // open device
         let mut conf = build_lc_config(device);
         let err = std::ptr::null_mut::<PLC_CONFIG_ERRORINFO>();
@@ -96,12 +97,15 @@ impl PciLeech {
                 .log_error(&format!("unable to create leechcore context: {:?}", err)));
         }
 
+        // TODO: update mem_map max size here instead of setting up metadata from scratch?
+
         Ok(Self {
             handle: Arc::new(Mutex::new(handle)),
             metadata: PhysicalMemoryMetadata {
-                size: conf.paMax as usize,
+                max_address: (conf.paMax as usize - 1_usize).into(),
+                real_size: conf.paMax as umem,
                 readonly: conf.fVolatile == 0,
-                // TODO: writable flag
+                ideal_batch_size: 128,
             },
             mem_map,
         })
@@ -127,12 +131,21 @@ struct WriteGap {
 
 // TODO: handle mem_map
 impl PhysicalMemory for PciLeech {
-    fn phys_read_raw_list(&mut self, data: &mut [PhysicalReadData]) -> Result<()> {
-        //let mem_map = &self.mem_map;
+    fn phys_read_raw_iter<'a>(
+        &mut self,
+        data: CIterator<PhysicalReadData<'a>>,
+        out_fail: &mut PhysicalReadFailCallback<'_, 'a>,
+    ) -> Result<()> {
+        let mem_map = &self.mem_map;
+
+        let mut callback = &mut |(a, b): (Address, _)| out_fail.call(MemData(a.into(), b));
+        let vec = mem_map
+            .map_iter(data.map(|MemData(addr, buf)| (addr, buf)), &mut callback)
+            .collect::<Vec<_>>();
 
         // get total number of pages
-        let num_pages = data.iter().fold(0u64, |acc, read| {
-            acc + calc_num_pages(read.0.as_u64(), read.1.len() as u64)
+        let num_pages = vec.iter().fold(0u64, |acc, read| {
+            acc + calc_num_pages(read.0 .0.to_umem(), read.1.len() as u64)
         });
 
         // allocate scatter buffer
@@ -153,17 +166,17 @@ impl PhysicalMemory for PciLeech {
         // prepare mems
         let mut gaps = Vec::new();
         let mut i = 0usize;
-        for read in data.iter_mut() {
-            for (page_addr, out) in read.1.page_chunks(read.0.into(), PAGE_SIZE) {
+        for read in vec.into_iter() {
+            for (page_addr, out) in read.1.page_chunks(read.0 .0.into(), PAGE_SIZE) {
                 let mem = unsafe { *mems.add(i) };
 
-                let addr_align = page_addr.as_u64() & (BUF_ALIGN - 1);
+                let addr_align = page_addr.to_umem() & (BUF_ALIGN - 1);
                 let len_align = out.len() & (BUF_LEN_ALIGN - 1);
 
                 if addr_align == 0 && len_align == 0 && out.len() >= BUF_MIN_LEN {
                     // properly aligned read
-                    unsafe { (*mem).qwA = page_addr.as_u64() };
-                    unsafe { (*mem).pb = out.as_mut_ptr() };
+                    unsafe { (*mem).qwA = page_addr.to_umem() };
+                    unsafe { (*mem).__bindgen_anon_1.pb = out.as_mut_ptr() };
                     unsafe { (*mem).cb = out.len() as u32 };
                 } else {
                     // non-aligned or small read
@@ -181,8 +194,8 @@ impl PhysicalMemory for PciLeech {
                         out_end: out.len() + addr_align as usize,
                     });
 
-                    unsafe { (*mem).qwA = page_addr.as_u64() - addr_align };
-                    unsafe { (*mem).pb = buffer_ptr };
+                    unsafe { (*mem).qwA = page_addr.to_umem() - addr_align };
+                    unsafe { (*mem).__bindgen_anon_1.pb = buffer_ptr };
                     unsafe { (*mem).cb = buffer_len as u32 };
                 }
 
@@ -225,12 +238,21 @@ impl PhysicalMemory for PciLeech {
         Ok(())
     }
 
-    fn phys_write_raw_list(&mut self, data: &[PhysicalWriteData]) -> Result<()> {
-        //let mem_map = &self.mem_map;
+    fn phys_write_raw_iter<'a>(
+        &mut self,
+        data: CIterator<PhysicalWriteData<'a>>,
+        out_fail: &mut PhysicalWriteFailCallback<'_, 'a>,
+    ) -> Result<()> {
+        let mem_map = &self.mem_map;
+
+        let mut callback = &mut |(a, b): (Address, _)| out_fail.call(MemData(a.into(), b));
+        let vec = mem_map
+            .map_iter(data.map(|MemData(addr, buf)| (addr, buf)), &mut callback)
+            .collect::<Vec<_>>();
 
         // get total number of pages
-        let num_pages = data.iter().fold(0u64, |acc, read| {
-            acc + calc_num_pages(read.0.as_u64(), read.1.len() as u64)
+        let num_pages = vec.iter().fold(0u64, |acc, read| {
+            acc + calc_num_pages(read.0 .0.to_umem(), read.1.len() as u64)
         });
 
         // allocate scatter buffer
@@ -251,17 +273,17 @@ impl PhysicalMemory for PciLeech {
         // prepare mems
         let mut gaps = Vec::new();
         let mut i = 0usize;
-        for write in data.iter() {
-            for (page_addr, out) in write.1.page_chunks(write.0.into(), PAGE_SIZE) {
+        for write in vec.iter() {
+            for (page_addr, out) in write.1.page_chunks(write.0 .0.into(), PAGE_SIZE) {
                 let mem = unsafe { *mems.add(i) };
 
-                let addr_align = page_addr.as_u64() & (BUF_ALIGN - 1);
+                let addr_align = page_addr.to_umem() & (BUF_ALIGN - 1);
                 let len_align = out.len() & (BUF_LEN_ALIGN - 1);
 
                 if addr_align == 0 && len_align == 0 && out.len() >= BUF_MIN_LEN {
                     // properly aligned read
-                    unsafe { (*mem).qwA = page_addr.as_u64() };
-                    unsafe { (*mem).pb = out.as_ptr() as *mut u8 };
+                    unsafe { (*mem).qwA = page_addr.to_umem() };
+                    unsafe { (*mem).__bindgen_anon_1.pb = out.as_ptr() as *mut u8 };
                     unsafe { (*mem).cb = out.len() as u32 };
                 } else {
                     // non-aligned or small read
@@ -269,7 +291,7 @@ impl PhysicalMemory for PciLeech {
                     buffer_len += BUF_LEN_ALIGN - (buffer_len & (BUF_LEN_ALIGN - 1));
 
                     // prepare gap buffer for reading
-                    let write_addr = (page_addr.as_u64() - addr_align).into();
+                    let write_addr = (page_addr.to_umem() - addr_align).into();
                     let buffer = vec![0u8; buffer_len].into_boxed_slice();
                     let buffer_ptr = Box::into_raw(buffer) as *mut u8;
 
@@ -284,8 +306,8 @@ impl PhysicalMemory for PciLeech {
                     });
 
                     // store pointers into pcileech struct for writing (after we dispatched a read)
-                    unsafe { (*mem).qwA = write_addr.as_u64() };
-                    unsafe { (*mem).pb = buffer_ptr };
+                    unsafe { (*mem).qwA = write_addr.to_umem() };
+                    unsafe { (*mem).__bindgen_anon_1.pb = buffer_ptr };
                     unsafe { (*mem).cb = buffer_len as u32 };
                 }
 
@@ -295,18 +317,17 @@ impl PhysicalMemory for PciLeech {
 
         // dispatch necessary reads to fill the gaps
         if !gaps.is_empty() {
-            let mut datas = gaps
-                .iter()
-                .map(|g| {
-                    PhysicalReadData(g.gap_addr, unsafe {
-                        slice::from_raw_parts_mut(g.gap_buffer, g.gap_buffer_len)
-                    })
-                })
-                .collect::<Vec<_>>();
+            let iter = gaps.iter().map(|g| {
+                MemData(
+                    g.gap_addr,
+                    unsafe { slice::from_raw_parts_mut(g.gap_buffer, g.gap_buffer_len) }.into(),
+                )
+            });
 
-            self.phys_read_raw_list(datas.as_mut_slice())?;
+            let out_fail = &mut |_| true;
+            self.phys_read_raw_iter((&mut iter.clone()).into(), &mut out_fail.into())?;
 
-            for (gap, read) in gaps.iter().zip(datas) {
+            for (gap, mut read) in gaps.iter().zip(iter) {
                 let in_buffer =
                     unsafe { slice::from_raw_parts(gap.in_buffer, gap.in_end - gap.in_start) };
                 read.1[gap.in_start..gap.in_end].copy_from_slice(in_buffer);
@@ -340,24 +361,32 @@ impl PhysicalMemory for PciLeech {
         self.metadata
     }
 
-    fn set_mem_map(&mut self, mem_map: MemoryMap<(Address, usize)>) {
-        self.metadata.size = mem_map.max_address().as_usize();
-        self.mem_map.merge(mem_map)
+    fn set_mem_map(&mut self, mem_map: &[PhysicalMemoryMapping]) {
+        let map = MemoryMap::<(Address, umem)>::from_vec(mem_map.to_vec());
+        self.mem_map.merge(map);
+
+        // update metadata fields
+        self.metadata.max_address = self.mem_map.max_address();
+        self.metadata.real_size = self.mem_map.real_size();
     }
 }
 
+fn validator() -> ArgsValidator {
+    ArgsValidator::new()
+        .arg(ArgDescriptor::new("default").description("the target device to be used by LeechCore"))
+        .arg(ArgDescriptor::new("device").description("the target device to be used by LeechCore"))
+        .arg(ArgDescriptor::new("memmap").description("the memory map file of the target machine"))
+}
+
 /// Creates a new PciLeech Connector instance.
+#[connector(name = "pcileech", help_fn = "help", target_list_fn = "target_list")]
 pub fn create_connector(args: &Args, log_level: Level) -> Result<PciLeech> {
     simple_logger::SimpleLogger::new()
         .with_level(log_level.to_level_filter())
         .init()
         .ok();
 
-    let validator = ArgsValidator::new()
-        .arg(ArgDescriptor::new("default").description("the target device to be used by LeechCore"))
-        .arg(ArgDescriptor::new("device").description("the target device to be used by LeechCore"))
-        .arg(ArgDescriptor::new("memmap").description("the memory map file of the target machine"));
-
+    let validator = validator();
     match validator.validate(&args) {
         Ok(_) => {
             let device = args
@@ -384,10 +413,24 @@ pub fn create_connector(args: &Args, log_level: Level) -> Result<PciLeech> {
     }
 }
 
-/// Creates a new PciLeech Connector instance.
-#[connector(name = "pcileech")]
-pub fn create_connector_instance(args: &Args, log_level: Level) -> Result<ConnectorInstance> {
-    let connector = create_connector(args, log_level)?;
-    let instance = ConnectorInstance::builder(connector).build();
-    Ok(instance)
+/// Retrieve the help text for the Qemu Procfs Connector.
+pub fn help() -> String {
+    let validator = validator();
+    format!(
+        "\
+The `pcileech` connector implements the LeechCore interface of pcileech for memflow.
+
+More information about pcileech can be found under https://github.com/ufrisk/pcileech.
+
+This connector requires access to the usb ports to access the pcileech hardware.
+
+Available arguments are:
+{}",
+        validator.to_string()
+    )
+}
+
+/// Retrieve a list of all currently available PciLeech targets.
+pub fn target_list() -> Result<Vec<TargetInfo>> {
+    Ok(vec![])
 }
