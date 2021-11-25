@@ -15,7 +15,10 @@ use leechcore_sys::*;
 
 const PAGE_SIZE: usize = 0x1000usize;
 
-const BUF_ALIGN: u64 = 4;
+// the absolute minimum BUF_ALIGN is 4.
+// using 8 bytes as BUF_ALIGN here simplifies things a lot
+// and makes our gap detection code work in cases where page boundaries would be crossed.
+const BUF_ALIGN: u64 = 8;
 const BUF_MIN_LEN: usize = 8;
 const BUF_LEN_ALIGN: usize = 8;
 
@@ -167,8 +170,24 @@ impl PhysicalMemory for PciLeech {
                     unsafe { (*mem).cb = out.len() as u32 };
                 } else {
                     // non-aligned or small read
-                    let mut buffer_len = (out.len() + addr_align as usize).max(BUF_MIN_LEN);
-                    buffer_len += BUF_LEN_ALIGN - (buffer_len & (BUF_LEN_ALIGN - 1));
+                    let page_addr_align = page_addr.to_umem() - addr_align;
+                    let mut buffer_len = out.len() + addr_align as usize;
+                    let buf_align = buffer_len & (BUF_LEN_ALIGN - 1);
+                    if buf_align > 0 {
+                        buffer_len += BUF_LEN_ALIGN - buf_align;
+                    }
+                    buffer_len = buffer_len.max(BUF_MIN_LEN);
+
+                    // note that this always holds true because addr alignment is equal to buf length alignment
+                    assert!(buffer_len >= out.len());
+
+                    // we never want to cross page boundaries, otherwise the read will just not work
+                    assert_eq!(
+                        page_addr.to_umem() - (page_addr.to_umem() & (PAGE_SIZE as umem - 1)),
+                        (page_addr_align + buffer_len as umem - 1)
+                            - ((page_addr_align + buffer_len as umem - 1)
+                                & (PAGE_SIZE as umem - 1))
+                    );
 
                     let buffer = vec![0u8; buffer_len].into_boxed_slice();
                     let buffer_ptr = Box::into_raw(buffer) as *mut u8;
@@ -181,7 +200,7 @@ impl PhysicalMemory for PciLeech {
                         out_end: out.len() + addr_align as usize,
                     });
 
-                    unsafe { (*mem).qwA = page_addr.to_umem() - addr_align };
+                    unsafe { (*mem).qwA = page_addr_align };
                     unsafe { (*mem).__bindgen_anon_1.pb = buffer_ptr };
                     unsafe { (*mem).cb = buffer_len as u32 };
                 }
@@ -272,23 +291,38 @@ impl PhysicalMemory for PciLeech {
                 let len_align = out.len() & (BUF_LEN_ALIGN - 1);
 
                 if addr_align == 0 && len_align == 0 && out.len() >= BUF_MIN_LEN {
-                    // properly aligned read
+                    // properly aligned write
                     unsafe { (*mem).qwA = page_addr.to_umem() };
                     unsafe { (*mem).__bindgen_anon_1.pb = out.as_ptr() as *mut u8 };
                     unsafe { (*mem).cb = out.len() as u32 };
                 } else {
-                    // non-aligned or small read
-                    let mut buffer_len = (out.len() + addr_align as usize).max(BUF_MIN_LEN);
-                    buffer_len += BUF_LEN_ALIGN - (buffer_len & (BUF_LEN_ALIGN - 1));
+                    // non-aligned or small write
+                    let page_addr_align = page_addr.to_umem() - addr_align;
+                    let mut buffer_len = out.len() + addr_align as usize;
+                    let buf_align = buffer_len & (BUF_LEN_ALIGN - 1);
+                    if buf_align > 0 {
+                        buffer_len += BUF_LEN_ALIGN - buf_align;
+                    }
+                    buffer_len = buffer_len.max(BUF_MIN_LEN);
 
-                    // prepare gap buffer for reading
-                    let write_addr = (page_addr.to_umem() - addr_align).into();
+                    // note that this always holds true because addr alignment is equal to buf length alignment
+                    assert!(buffer_len >= out.len());
+
+                    // we never want to cross page boundaries, otherwise the write will just not work
+                    assert_eq!(
+                        page_addr.to_umem() - (page_addr.to_umem() & (PAGE_SIZE as umem - 1)),
+                        (page_addr_align + buffer_len as umem - 1)
+                            - ((page_addr_align + buffer_len as umem - 1)
+                                & (PAGE_SIZE as umem - 1))
+                    );
+
+                    // prepare gap buffer for writing
                     let buffer = vec![0u8; buffer_len].into_boxed_slice();
                     let buffer_ptr = Box::into_raw(buffer) as *mut u8;
 
                     // send over to our gaps list
                     gaps.push(WriteGap {
-                        gap_addr: write_addr,
+                        gap_addr: page_addr_align.into(),
                         gap_buffer: buffer_ptr,
                         gap_buffer_len: buffer_len,
                         in_buffer: out.as_ptr(),
@@ -297,7 +331,7 @@ impl PhysicalMemory for PciLeech {
                     });
 
                     // store pointers into pcileech struct for writing (after we dispatched a read)
-                    unsafe { (*mem).qwA = write_addr.to_umem() };
+                    unsafe { (*mem).qwA = page_addr_align };
                     unsafe { (*mem).__bindgen_anon_1.pb = buffer_ptr };
                     unsafe { (*mem).cb = buffer_len as u32 };
                 }
