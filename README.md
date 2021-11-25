@@ -79,7 +79,7 @@ let conn_args = if args.len() > 1 {
     ConnectorArgs::new()
 };
 
-let mut conn = memflow_pcileech::create_connector(&conn_args)
+let mut conn = memflow_pcileech::create_connector(&conn_args, log::Level::Debug)
     .expect("unable to initialize memflow_pcileech");
 ```
 
@@ -109,6 +109,8 @@ On Windows systems the memory map can be obtained from the Registry under the fo
 ```
 HKEY_LOCAL_MACHINE\\HARDWARE\\RESOURCEMAP\\System Resources\\Physical Memory\\.Translated
 ```
+
+In case no memory mappings are provided by the user the connector will use the memory mappings found by the os integration (e.g. win32).
 
 ## Troubleshooting
 
