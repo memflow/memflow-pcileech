@@ -32,7 +32,7 @@ fn main() {
         Args::new().insert("device", "FPGA")
     };
 
-    let connector = memflow_pcileech::create_connector(&connector_args, Level::Debug)
+    let connector = memflow_pcileech::create_connector(&connector_args)
         .expect("unable to create pcileech connector");
 
     let mut os = Win32Kernel::builder(connector)

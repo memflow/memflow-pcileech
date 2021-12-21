@@ -5,7 +5,7 @@ use std::ptr;
 use std::slice;
 use std::sync::{Arc, Mutex};
 
-use log::{error, info, Level};
+use log::{error, info};
 
 use memflow::cglue;
 use memflow::mem::phys_mem::*;
@@ -424,14 +424,9 @@ fn validator() -> ArgsValidator {
 
 /// Creates a new PciLeech Connector instance.
 #[connector(name = "pcileech", help_fn = "help", target_list_fn = "target_list")]
-pub fn create_connector(args: &Args, log_level: Level) -> Result<PciLeech> {
-    simple_logger::SimpleLogger::new()
-        .with_level(log_level.to_level_filter())
-        .init()
-        .ok();
-
+pub fn create_connector(args: &Args) -> Result<PciLeech> {
     let validator = validator();
-    match validator.validate(&args) {
+    match validator.validate(args) {
         Ok(_) => {
             let device = args
                 .get("device")
