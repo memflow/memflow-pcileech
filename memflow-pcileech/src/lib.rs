@@ -115,7 +115,6 @@ struct WriteGap {
     in_end: usize,
 }
 
-// TODO: handle mem_map
 impl PhysicalMemory for PciLeech {
     fn phys_read_raw_iter<'a>(
         &mut self,

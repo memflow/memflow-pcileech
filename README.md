@@ -48,7 +48,6 @@ Remarks: The `install.sh` script does currently not place the `leechcore_ft601_d
 
 ### Building the stand-alone connector for dynamic loading
 
-The stand-alone connector of this library is feature-gated behind the `inventory` feature.
 To compile a dynamic library for use with the connector inventory use the following command:
 
 ```
