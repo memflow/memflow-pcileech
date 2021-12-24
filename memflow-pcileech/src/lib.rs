@@ -119,12 +119,11 @@ impl PhysicalMemory for PciLeech {
     fn phys_read_raw_iter<'a>(
         &mut self,
         data: CIterator<PhysicalReadData<'a>>,
-        out_fail: &mut PhysicalReadFailCallback<'_, 'a>,
+        out_fail: &mut ReadFailCallback<'_, 'a>,
     ) -> Result<()> {
         let vec = if let Some(mem_map) = &self.mem_map {
-            let mut callback = &mut |(a, b): (Address, _)| out_fail.call(MemData(a.into(), b));
             mem_map
-                .map_iter(data.map(|MemData(addr, buf)| (addr, buf)), &mut callback)
+                .map_iter(data, out_fail)
                 .map(|d| (d.0 .0.into(), d.1))
                 .collect::<Vec<_>>()
         } else {
@@ -246,12 +245,11 @@ impl PhysicalMemory for PciLeech {
     fn phys_write_raw_iter<'a>(
         &mut self,
         data: CIterator<PhysicalWriteData<'a>>,
-        out_fail: &mut PhysicalWriteFailCallback<'_, 'a>,
+        out_fail: &mut WriteFailCallback<'_, 'a>,
     ) -> Result<()> {
         let vec = if let Some(mem_map) = &self.mem_map {
-            let mut callback = &mut |(a, b): (Address, _)| out_fail.call(MemData(a.into(), b));
             mem_map
-                .map_iter(data.map(|MemData(addr, buf)| (addr, buf)), &mut callback)
+                .map_iter(data, out_fail)
                 .map(|d| (d.0 .0.into(), d.1))
                 .collect::<Vec<_>>()
         } else {
@@ -416,26 +414,24 @@ impl PhysicalMemory for PciLeech {
 
 fn validator() -> ArgsValidator {
     ArgsValidator::new()
-        .arg(ArgDescriptor::new("default").description("the target device to be used by LeechCore"))
         .arg(ArgDescriptor::new("device").description("the target device to be used by LeechCore"))
         .arg(ArgDescriptor::new("memmap").description("the memory map file of the target machine"))
 }
 
 /// Creates a new PciLeech Connector instance.
 #[connector(name = "pcileech", help_fn = "help", target_list_fn = "target_list")]
-pub fn create_connector(args: &Args) -> Result<PciLeech> {
+pub fn create_connector(args: &ConnectorArgs) -> Result<PciLeech> {
     let validator = validator();
-    match validator.validate(args) {
+    match validator.validate(&args.extra_args) {
         Ok(_) => {
-            let device = args
+            let device = args.extra_args
                 .get("device")
-                .or_else(|| args.get_default())
                 .ok_or_else(|| {
                     Error(ErrorOrigin::Connector, ErrorKind::ArgValidation)
                         .log_error("'device' argument is missing")
                 })?;
 
-            if let Some(memmap) = args.get("memmap") {
+            if let Some(memmap) = args.extra_args.get("memmap") {
                 PciLeech::with_mem_map_file(device, memmap)
             } else {
                 PciLeech::new(device)
