@@ -22,23 +22,27 @@ use log::{info, Level};
 use memflow::prelude::v1::*;
 
 fn main() {
-    simple_logger::SimpleLogger::new()
-        .with_level(Level::Debug.to_level_filter())
-        .init()
-        .unwrap();
+    simplelog::TermLogger::init(
+        Level::Debug.to_level_filter(),
+        simplelog::Config::default(),
+        simplelog::TerminalMode::Stdout,
+        simplelog::ColorChoice::Auto,
+    )
+    .unwrap();
 
     let connector_args = if let Some(arg) = args().nth(1) {
-        Args::parse(arg.as_ref()).expect("unable to parse command line arguments")
+        arg.parse()
     } else {
-        Args::new().insert("device", "FPGA")
-    };
+        "device=FPGA".parse()
+    }
+    .expect("unable to parse command line arguments");
 
     let inventory = Inventory::scan();
     let connector = inventory
-        .create_connector("pcileech", None, &connector_args)
+        .create_connector("pcileech", None, Some(&connector_args))
         .expect("unable to create pcileech connector");
     let mut os = inventory
-        .create_os("win32", Some(connector), &Args::default())
+        .create_os("win32", Some(connector), None)
         .expect("unable to create win32 instance with pcileech connector");
 
     let process_list = os.process_info_list().expect("unable to read process list");

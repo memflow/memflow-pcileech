@@ -414,6 +414,7 @@ impl PhysicalMemory for PciLeech {
 
 fn validator() -> ArgsValidator {
     ArgsValidator::new()
+        .arg(ArgDescriptor::new("default").description("the target device to be used by LeechCore"))
         .arg(ArgDescriptor::new("device").description("the target device to be used by LeechCore"))
         .arg(ArgDescriptor::new("memmap").description("the memory map file of the target machine"))
 }
@@ -422,16 +423,20 @@ fn validator() -> ArgsValidator {
 #[connector(name = "pcileech", help_fn = "help", target_list_fn = "target_list")]
 pub fn create_connector(args: &ConnectorArgs) -> Result<PciLeech> {
     let validator = validator();
-    match validator.validate(&args.extra_args) {
+
+    let args = &args.extra_args;
+
+    match validator.validate(args) {
         Ok(_) => {
-            let device = args.extra_args
+            let device = args
                 .get("device")
+                .or_else(|| args.get_default())
                 .ok_or_else(|| {
                     Error(ErrorOrigin::Connector, ErrorKind::ArgValidation)
                         .log_error("'device' argument is missing")
                 })?;
 
-            if let Some(memmap) = args.extra_args.get("memmap") {
+            if let Some(memmap) = args.get("memmap") {
                 PciLeech::with_mem_map_file(device, memmap)
             } else {
                 PciLeech::new(device)
@@ -466,5 +471,6 @@ Available arguments are:
 
 /// Retrieve a list of all currently available PciLeech targets.
 pub fn target_list() -> Result<Vec<TargetInfo>> {
+    // TODO: check if usb is connected, then list 1 target
     Ok(vec![])
 }

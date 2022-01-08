@@ -17,12 +17,12 @@ crate-type = ["lib", "cdylib"]
 
 [dependencies]
 memflow = { git = "https://github.com/memflow/memflow", branch = "next", features = ["plugins", "memmapfiles"] }
-log = { version = "0.4", default-features = false }
 leechcore-sys = { path = "../leechcore-sys" }
+log = "^0.4.14"
 
 [dev-dependencies]
-clap = "2.33"
-simple_logger = "1.0"
+clap = { version = "^3.0.5", features = ["cargo"] }
+simplelog = "^0.11.1"
 memflow-win32 = { git = "https://github.com/memflow/memflow-win32", branch = "main" }
 
 [[example]]
