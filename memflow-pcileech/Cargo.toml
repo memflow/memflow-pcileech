@@ -1,6 +1,6 @@
 [package]
 name = "memflow-pcileech"
-version = "0.1.5"
+version = "0.2.0-beta1"
 authors = ["ko1N <ko1N1337@gmail.com>"]
 edition = "2018"
 description = "qemu procfs connector for leechcore/pcileech"
@@ -9,6 +9,7 @@ readme = "../README.md"
 homepage = "https://memflow.github.io"
 repository = "https://github.com/memflow/memflow-pcileech"
 license-file = "../LICENSE"
+license = "GPL-3.0"
 keywords = [ "memflow", "introspection", "memory" ]
 categories = [ "api-bindings", "memory-management", "os" ]
 
@@ -16,16 +17,23 @@ categories = [ "api-bindings", "memory-management", "os" ]
 crate-type = ["lib", "cdylib"]
 
 [dependencies]
-memflow = { version = "0.1", features = ["inventory", "serde_derive"] }
-memflow-derive = { version = "0.1" }
-log = { version = "0.4", default-features = false }
-simple_logger = "1.0"
-leechcore-sys = { path = "../leechcore-sys" }
+memflow = { version = "^0.2.0-beta", features = ["plugins", "memmapfiles"] }
+leechcore-sys = { version = "0.2.0-beta1", path = "../leechcore-sys" }
+log = "^0.4.14"
 
-[features]
-default = []
-inventory = []
+[dev-dependencies]
+clap = { version = "^3.0.5", features = ["cargo"] }
+simplelog = "^0.11.1"
+memflow-win32 = { version = "^0.2.0-beta" }
 
 [[example]]
 name = "read_phys"
 path = "examples/read_phys.rs"
+
+[[example]]
+name = "ps_win32"
+path = "examples/ps_win32.rs"
+
+[[example]]
+name = "ps_inventory"
+path = "examples/ps_inventory.rs"

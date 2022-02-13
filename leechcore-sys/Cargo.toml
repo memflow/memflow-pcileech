@@ -1,10 +1,11 @@
 [package]
 name = "leechcore-sys"
-version = "0.1.5"
+version = "0.2.0-beta1"
 authors = ["ko1N <ko1N1337@gmail.com>"]
 edition = "2018"
 readme = "../README.md"
 license-file = "../LICENSE"
+license = "GPL-3.0"
 
 links = "leechcore"
 

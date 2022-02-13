@@ -1,3 +1,9 @@
+[profile.bench]
+debug = true
+
+[profile.release]
+lto = "fat"
+
 [workspace]
 members = [
     "leechcore-sys",
@@ -7,6 +13,3 @@ default-members = [
     "leechcore-sys",
     "memflow-pcileech",
 ]
-
-[profile.release]
-lto = true
