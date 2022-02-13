@@ -190,7 +190,8 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 [[package]]
 name = "cglue"
 version = "0.2.5"
-source = "git+https://github.com/h33p/cglue.git?branch=main#02e0f1089fe942edcda0391d12a008b6459bcc99"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9537a13fdbce0f3ef3fbc55d70dfd93c807c9c71fbdf97950da033ab1ef5a5ad"
 dependencies = [
  "abi_stable",
  "cglue-macro",
@@ -200,8 +201,9 @@ dependencies = [
 
 [[package]]
 name = "cglue-gen"
-version = "0.2.2"
-source = "git+https://github.com/h33p/cglue.git?branch=main#02e0f1089fe942edcda0391d12a008b6459bcc99"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8693afab1b06d4722b35d51bc4c4ea7a41887e3f95ad4a67b73bb82cf7efe7c1"
 dependencies = [
  "itertools",
  "lazy_static",
@@ -214,7 +216,8 @@ dependencies = [
 [[package]]
 name = "cglue-macro"
 version = "0.2.1"
-source = "git+https://github.com/h33p/cglue.git?branch=main#02e0f1089fe942edcda0391d12a008b6459bcc99"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a29a3b995b31756072458741810fd9ffe73b0a5fafa6ad08324b463c44ef528"
 dependencies = [
  "cglue-gen",
  "proc-macro2",
@@ -635,7 +638,7 @@ checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
 
 [[package]]
 name = "leechcore-sys"
-version = "0.1.5"
+version = "0.2.0-beta1"
 dependencies = [
  "bindgen",
  "cc",
@@ -691,8 +694,9 @@ checksum = "308cc39be01b73d0d18f82a0e7b2a3df85245f84af96fdddc5d202d27e47b86a"
 
 [[package]]
 name = "memflow"
-version = "0.1.5"
-source = "git+https://github.com/memflow/memflow?branch=next#8627a9d575206461bec2b9c236a80af4879259e3"
+version = "0.2.0-beta1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b4bd4a071d4376feb60428ba6e19f43174e992a32bf4056a8e1ac56347096696"
 dependencies = [
  "abi_stable",
  "bitflags",
@@ -711,6 +715,7 @@ dependencies = [
  "memmap",
  "no-std-compat",
  "once_cell",
+ "pelite",
  "rangemap",
  "serde",
  "smallvec",
@@ -720,8 +725,9 @@ dependencies = [
 
 [[package]]
 name = "memflow-derive"
-version = "0.1.5"
-source = "git+https://github.com/memflow/memflow?branch=next#8627a9d575206461bec2b9c236a80af4879259e3"
+version = "0.2.0-beta1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b162b846355c1067a2f83fb37e193a441d05d6528e02d9bab658becbb78851fb"
 dependencies = [
  "darling",
  "proc-macro-crate",
@@ -732,7 +738,7 @@ dependencies = [
 
 [[package]]
 name = "memflow-pcileech"
-version = "0.1.5"
+version = "0.2.0-beta1"
 dependencies = [
  "clap 3.0.5",
  "leechcore-sys",
@@ -744,8 +750,9 @@ dependencies = [
 
 [[package]]
 name = "memflow-win32"
-version = "0.1.5"
-source = "git+https://github.com/memflow/memflow-win32?branch=main#e94c7120296b0fc0404fe79b41f87f646362c28e"
+version = "0.2.0-beta1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d399458de5a5884fbb8cc1ddebad74845275d6a58d98a4ade0caeca12380c5a3"
 dependencies = [
  "dirs",
  "goblin",
