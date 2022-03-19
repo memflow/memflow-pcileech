@@ -644,7 +644,7 @@ checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
 
 [[package]]
 name = "leechcore-sys"
-version = "0.2.0-beta1"
+version = "0.2.0-beta2"
 dependencies = [
  "bindgen",
  "cc",
@@ -744,7 +744,7 @@ dependencies = [
 
 [[package]]
 name = "memflow-pcileech"
-version = "0.2.0-beta1"
+version = "0.2.0-beta2"
 dependencies = [
  "clap 3.1.6",
  "leechcore-sys",
