@@ -116,19 +116,14 @@ struct WriteGap {
 }
 
 impl PhysicalMemory for PciLeech {
-    fn phys_read_raw_iter<'a>(
-        &mut self,
-        data: CIterator<PhysicalReadData<'a>>,
-        out_fail: &mut ReadFailCallback<'_, 'a>,
-    ) -> Result<()> {
+    fn phys_read_raw_iter<'a>(&mut self, data: PhysicalReadMemOps) -> Result<()> {
         let vec = if let Some(mem_map) = &self.mem_map {
             mem_map
-                .map_iter(data, out_fail)
-                .map(|d| (d.0 .0.into(), d.1))
+                .map_iter(data.inp, data.out_fail)
+                .map(|d| (d.0 .0.into(), d.2))
                 .collect::<Vec<_>>()
         } else {
-            data.map(|MemData(addr, buf)| (addr, buf))
-                .collect::<Vec<_>>()
+            data.inp.map(|d| (d.0, d.2)).collect::<Vec<_>>()
         };
 
         // get total number of pages
@@ -242,19 +237,14 @@ impl PhysicalMemory for PciLeech {
         Ok(())
     }
 
-    fn phys_write_raw_iter<'a>(
-        &mut self,
-        data: CIterator<PhysicalWriteData<'a>>,
-        out_fail: &mut WriteFailCallback<'_, 'a>,
-    ) -> Result<()> {
+    fn phys_write_raw_iter<'a>(&mut self, data: PhysicalWriteMemOps) -> Result<()> {
         let vec = if let Some(mem_map) = &self.mem_map {
             mem_map
-                .map_iter(data, out_fail)
-                .map(|d| (d.0 .0.into(), d.1))
+                .map_iter(data.inp, data.out_fail)
+                .map(|d| (d.0 .0.into(), d.2))
                 .collect::<Vec<_>>()
         } else {
-            data.map(|MemData(addr, buf)| (addr, buf))
-                .collect::<Vec<_>>()
+            data.inp.map(|d| (d.0, d.2)).collect::<Vec<_>>()
         };
 
         // get total number of pages
@@ -339,25 +329,22 @@ impl PhysicalMemory for PciLeech {
 
         // dispatch necessary reads to fill the gaps
         if !gaps.is_empty() {
-            let mut vec = gaps
+            let mut vec: Vec<CTup2<PhysicalAddress, &mut [u8]>> = gaps
                 .iter()
                 .map(|g| {
-                    MemData(
-                        g.gap_addr,
-                        unsafe { slice::from_raw_parts_mut(g.gap_buffer, g.gap_buffer_len) }.into(),
-                    )
+                    CTup2(g.gap_addr, unsafe {
+                        slice::from_raw_parts_mut(g.gap_buffer, g.gap_buffer_len)
+                    })
                 })
                 .collect::<Vec<_>>();
 
             let mut iter = vec
                 .iter_mut()
-                .map(|MemData(a, d): &mut PhysicalReadData| MemData(*a, d.into()));
+                .map(|CTup2(a, d)| (*a, CSliceRef::from(d.as_bytes())));
 
-            let out_fail = &mut |_| true;
+            MemOps::with(&mut iter, None, None, |data| self.phys_write_raw_iter(data))?;
 
-            self.phys_read_raw_iter((&mut iter).into(), &mut out_fail.into())?;
-
-            for (gap, mut read) in gaps.iter().zip(vec) {
+            for (gap, read) in gaps.iter().zip(vec) {
                 let in_buffer =
                     unsafe { slice::from_raw_parts(gap.in_buffer, gap.in_end - gap.in_start) };
                 read.1[gap.in_start..gap.in_end].copy_from_slice(in_buffer);
@@ -465,7 +452,7 @@ This connector requires access to the usb ports to access the pcileech hardware.
 
 Available arguments are:
 {}",
-        validator.to_string()
+        validator
     )
 }
 

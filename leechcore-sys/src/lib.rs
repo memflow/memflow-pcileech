@@ -2,7 +2,9 @@
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
 #![allow(improper_ctypes)]
+#![allow(deref_nullptr)]
 #![allow(clippy::missing_safety_doc)]
+#![allow(clippy::redundant_static_lifetimes)]
 #![allow(clippy::redundant_static_lifetimes)]
 
 include!(concat!(env!("OUT_DIR"), "/leechcore.rs"));
