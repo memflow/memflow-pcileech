@@ -113,7 +113,7 @@ fn main() {
     // workaround for windows.h
     // see https://github.com/rust-lang/rust-bindgen/issues/1556
     if target.contains("windows") {
-        builder = builder.blacklist_type("_?P?IMAGE_TLS_DIRECTORY.*")
+        builder = builder.blocklist_type("_?P?IMAGE_TLS_DIRECTORY.*")
     }
 
     let bindings = builder
