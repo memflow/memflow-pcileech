@@ -116,8 +116,8 @@ struct WriteGap {
 }
 
 impl PhysicalMemory for PciLeech {
-    fn phys_read_raw_iter<'a>(&mut self, data: PhysicalReadMemOps) -> Result<()> {
-        let vec = if let Some(mem_map) = &self.mem_map {
+    fn phys_read_raw_iter<'a>(&mut self, mut data: PhysicalReadMemOps) -> Result<()> {
+        let mut vec = if let Some(mem_map) = &self.mem_map {
             mem_map
                 .map_iter(data.inp, data.out_fail)
                 .map(|d| (d.0 .0.into(), d.1, d.2))
@@ -149,8 +149,8 @@ impl PhysicalMemory for PciLeech {
         // prepare mems
         let mut gaps = Vec::new();
         let mut i = 0usize;
-        for read in vec.into_iter() {
-            for (page_addr, out) in read.2.page_chunks(read.0.into(), PAGE_SIZE) {
+        for (addr, _, out) in vec.iter_mut() {
+            for (page_addr, out) in CSliceMut::from(out).page_chunks(addr.address(), PAGE_SIZE) {
                 let mem = unsafe { *mems.add(i) };
 
                 let addr_align = page_addr.to_umem() & (BUF_ALIGN - 1);
@@ -235,18 +235,15 @@ impl PhysicalMemory for PciLeech {
         };
 
         // call out sucess for everything
-        /*
-        for read in vec.into_iter() {
-            for (page_addr, out) in read.2.page_chunks(read.0.into(), PAGE_SIZE) {
-                opt_call(data.out.as_deref_mut(), CTup2(page_addr, out));
-            }
+        // TODO: implement proper callback based on `f` in scatter
+        for (_, meta_addr, out) in vec.into_iter() {
+            opt_call(data.out.as_deref_mut(), CTup2(meta_addr, out));
         }
-        */
 
         Ok(())
     }
 
-    fn phys_write_raw_iter<'a>(&mut self, data: PhysicalWriteMemOps) -> Result<()> {
+    fn phys_write_raw_iter<'a>(&mut self, mut data: PhysicalWriteMemOps) -> Result<()> {
         let vec = if let Some(mem_map) = &self.mem_map {
             mem_map
                 .map_iter(data.inp, data.out_fail)
@@ -382,6 +379,12 @@ impl PhysicalMemory for PciLeech {
         unsafe {
             LcMemFree(mems as *mut c_void);
         };
+
+        // call out sucess for everything
+        // TODO: implement proper callback based on `f` in scatter
+        for (_, meta_addr, out) in vec.into_iter() {
+            opt_call(data.out.as_deref_mut(), CTup2(meta_addr, out));
+        }
 
         Ok(())
     }

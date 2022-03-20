@@ -189,9 +189,9 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "cglue"
-version = "0.2.10"
+version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15d7ac3d7a04e9aa5fdcd74126bed0217e3b9064dc55883fc1af63caffe07267"
+checksum = "8a83ef0a0d6f7a8db45b93b31fde7058968d9ec7aea2d9777413f30a6c82b69e"
 dependencies = [
  "abi_stable",
  "cglue-macro",
@@ -1517,9 +1517,9 @@ dependencies = [
 
 [[package]]
 name = "which"
-version = "4.2.4"
+version = "4.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a5a7e487e921cf220206864a94a89b6c6905bfc19f1057fa26a4cb360e5c1d2"
+checksum = "5c4fb54e6113b6a8772ee41c3404fb0301ac79604489467e0a9ce1f3e97c24ae"
 dependencies = [
  "either",
  "lazy_static",
