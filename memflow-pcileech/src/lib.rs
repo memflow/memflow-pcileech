@@ -116,7 +116,7 @@ struct WriteGap {
 }
 
 impl PhysicalMemory for PciLeech {
-    fn phys_read_raw_iter<'a>(&mut self, mut data: PhysicalReadMemOps) -> Result<()> {
+    fn phys_read_raw_iter<'a>(&mut self, data: PhysicalReadMemOps) -> Result<()> {
         let vec = if let Some(mem_map) = &self.mem_map {
             mem_map
                 .map_iter(data.inp, data.out_fail)
@@ -149,7 +149,7 @@ impl PhysicalMemory for PciLeech {
         // prepare mems
         let mut gaps = Vec::new();
         let mut i = 0usize;
-        for read in vec.iter() {
+        for read in vec.into_iter() {
             for (page_addr, out) in read.2.page_chunks(read.0.into(), PAGE_SIZE) {
                 let mem = unsafe { *mems.add(i) };
 
