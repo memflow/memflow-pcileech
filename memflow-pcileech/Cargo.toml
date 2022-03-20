@@ -1,6 +1,6 @@
 [package]
 name = "memflow-pcileech"
-version = "0.2.0-beta2"
+version = "0.2.0-beta5"
 authors = ["ko1N <ko1N1337@gmail.com>"]
 edition = "2018"
 description = "qemu procfs connector for leechcore/pcileech"

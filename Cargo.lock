@@ -644,7 +644,7 @@ checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
 
 [[package]]
 name = "leechcore-sys"
-version = "0.2.0-beta2"
+version = "0.2.0-beta5"
 dependencies = [
  "bindgen",
  "cc",
@@ -700,9 +700,9 @@ checksum = "308cc39be01b73d0d18f82a0e7b2a3df85245f84af96fdddc5d202d27e47b86a"
 
 [[package]]
 name = "memflow"
-version = "0.2.0-beta4"
+version = "0.2.0-beta5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "336b4a34877219e71976e12bb5953e77f5091a12db86ecb07077112d50ffc1e5"
+checksum = "6a9d20b115d9fdaae988c5aa4f0aee56961e94b7e90c54d8ef536f438b610f73"
 dependencies = [
  "abi_stable",
  "bitflags",
@@ -744,7 +744,7 @@ dependencies = [
 
 [[package]]
 name = "memflow-pcileech"
-version = "0.2.0-beta2"
+version = "0.2.0-beta5"
 dependencies = [
  "clap 3.1.6",
  "leechcore-sys",
