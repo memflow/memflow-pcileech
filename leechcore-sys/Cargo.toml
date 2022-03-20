@@ -13,5 +13,5 @@ ctor = "0.1"
 
 [build-dependencies]
 cc = "1.0"
-bindgen = "0.56"
+bindgen = "0.59"
 pkg-config = "0.3"

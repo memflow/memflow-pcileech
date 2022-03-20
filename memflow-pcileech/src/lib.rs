@@ -116,19 +116,19 @@ struct WriteGap {
 }
 
 impl PhysicalMemory for PciLeech {
-    fn phys_read_raw_iter<'a>(&mut self, data: PhysicalReadMemOps) -> Result<()> {
+    fn phys_read_raw_iter<'a>(&mut self, mut data: PhysicalReadMemOps) -> Result<()> {
         let vec = if let Some(mem_map) = &self.mem_map {
             mem_map
                 .map_iter(data.inp, data.out_fail)
-                .map(|d| (d.0 .0.into(), d.2))
+                .map(|d| (d.0 .0.into(), d.1, d.2))
                 .collect::<Vec<_>>()
         } else {
-            data.inp.map(|d| (d.0, d.2)).collect::<Vec<_>>()
+            data.inp.map(|d| (d.0, d.1, d.2)).collect::<Vec<_>>()
         };
 
         // get total number of pages
         let num_pages = vec.iter().fold(0u64, |acc, read| {
-            acc + calc_num_pages(read.0.to_umem(), read.1.len() as u64)
+            acc + calc_num_pages(read.0.to_umem(), read.2.len() as u64)
         });
 
         // allocate scatter buffer
@@ -149,8 +149,8 @@ impl PhysicalMemory for PciLeech {
         // prepare mems
         let mut gaps = Vec::new();
         let mut i = 0usize;
-        for read in vec.into_iter() {
-            for (page_addr, out) in read.1.page_chunks(read.0.into(), PAGE_SIZE) {
+        for read in vec.iter() {
+            for (page_addr, out) in read.2.page_chunks(read.0.into(), PAGE_SIZE) {
                 let mem = unsafe { *mems.add(i) };
 
                 let addr_align = page_addr.to_umem() & (BUF_ALIGN - 1);
@@ -234,6 +234,15 @@ impl PhysicalMemory for PciLeech {
             LcMemFree(mems as *mut c_void);
         };
 
+        // call out sucess for everything
+        /*
+        for read in vec.into_iter() {
+            for (page_addr, out) in read.2.page_chunks(read.0.into(), PAGE_SIZE) {
+                opt_call(data.out.as_deref_mut(), CTup2(page_addr, out));
+            }
+        }
+        */
+
         Ok(())
     }
 
@@ -241,15 +250,15 @@ impl PhysicalMemory for PciLeech {
         let vec = if let Some(mem_map) = &self.mem_map {
             mem_map
                 .map_iter(data.inp, data.out_fail)
-                .map(|d| (d.0 .0.into(), d.2))
+                .map(|d| (d.0 .0.into(), d.1, d.2))
                 .collect::<Vec<_>>()
         } else {
-            data.inp.map(|d| (d.0, d.2)).collect::<Vec<_>>()
+            data.inp.map(|d| (d.0, d.1, d.2)).collect::<Vec<_>>()
         };
 
         // get total number of pages
         let num_pages = vec.iter().fold(0u64, |acc, read| {
-            acc + calc_num_pages(read.0.to_umem(), read.1.len() as u64)
+            acc + calc_num_pages(read.0.to_umem(), read.2.len() as u64)
         });
 
         // allocate scatter buffer
@@ -271,7 +280,7 @@ impl PhysicalMemory for PciLeech {
         let mut gaps = Vec::new();
         let mut i = 0usize;
         for write in vec.iter() {
-            for (page_addr, out) in write.1.page_chunks(write.0.into(), PAGE_SIZE) {
+            for (page_addr, out) in write.2.page_chunks(write.0.into(), PAGE_SIZE) {
                 let mem = unsafe { *mems.add(i) };
 
                 let addr_align = page_addr.to_umem() & (BUF_ALIGN - 1);
@@ -350,6 +359,9 @@ impl PhysicalMemory for PciLeech {
                 read.1[gap.in_start..gap.in_end].copy_from_slice(in_buffer);
             }
         }
+
+        // TODO:
+        // opt_call(out.as_deref_mut(), CTup2(meta_addr, data));
 
         // dispatch write
         {
