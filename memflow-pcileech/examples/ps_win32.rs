@@ -32,7 +32,7 @@ fn main() {
     let connector_args = if let Some(arg) = args().nth(1) {
         arg.parse()
     } else {
-        "device=FPGA".parse()
+        ":device=FPGA".parse()
     }
     .expect("unable to parse command line arguments");
 
