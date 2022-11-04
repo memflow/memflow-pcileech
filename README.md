@@ -21,7 +21,7 @@ Make sure that libclang can be found by either adding it to your `PATH` or via t
 
 On Windows you additionally need to supply the proprietary `FTD3XX.dll`. It can be downloaded from the [FTDI Website](https://www.ftdichip.com/Drivers/D3XX.htm) in the `Application Library (DLL)` column.
 
-On Linux you need to check-out and compile the `leechcore_ft601_driver_linux` project from the [LeechCore-Plugins](https://github.com/ufrisk/LeechCore-plugins) repository.
+On Linux you need to check-out and compile the `leechcore_ft601_driver_linux` project from the [LeechCore-Plugins](https://github.com/ufrisk/LeechCore-plugins) repository. On Linux the `leechcore_ft601_driver_linux.so` file currently has to be placed in `/usr/` or `/usr/lib`. Alternatively `LD_LIBRARY_PATH` can be set to the containing path. Check the [dlopen](https://man7.org/linux/man-pages/man3/dlopen.3.html) documentation for all possible import paths.
 
 More information about these requirements can be found in the [LeechCore-Plugins](https://github.com/ufrisk/LeechCore-plugins) repository.
 
@@ -37,6 +37,11 @@ On Linux the example binary will be ran with `sudo -E` to elevate privileges.
 
 Since the invoked binary is placed in the `target/release/examples` or `/target/debug/examples` folder the `leechcore_ft601_driver_linux.so` has to be placed in the corresponding folder.
 On Windows the `FTD3XX.dll` has to be placed in the corresponding examples folder.
+
+Alternatively you can also run memflow examples by running them directly from the [memflow](https://github.com/memflow/memflow) repository directory:
+```
+cargo run --example process_list --release -- --connector pcileech::device=FPGA --os win32
+```
 
 ### Installing the library
 
