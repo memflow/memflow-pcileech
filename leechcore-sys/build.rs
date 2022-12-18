@@ -25,17 +25,18 @@ fn os_define() -> &'static str {
 
 fn build_leechcore(target: &str) {
     let mut files = vec![
-        "oscompatibility.c",
-        "leechcore.c",
-        "util.c",
-        "memmap.c",
         "device_file.c",
         "device_fpga.c",
         "device_pmem.c",
         "device_tmd.c",
         "device_usb3380.c",
+        "device_vmm.c",
         "device_vmware.c",
+        "leechcore.c",
         "leechrpcclient.c",
+        "memmap.c",
+        "oscompatibility.c",
+        "util.c",
     ];
     if target.contains("windows") {
         files.push("leechrpc_c.c");
