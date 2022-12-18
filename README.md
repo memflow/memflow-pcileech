@@ -14,7 +14,7 @@ git submodule update --init
 
 Install the following build tools:
 - gcc
-- clang
+- clang (only required when selecting feature `bindgen`)
 - libusb-1.0 (only required on linux)
 
 Make sure that libclang can be found by either adding it to your `PATH` or via the `LIBCLANG_PATH` environment variable.
@@ -54,10 +54,16 @@ Remarks: The `install.sh` script does currently not place the `leechcore_ft601_d
 ### Building the stand-alone connector for dynamic loading
 
 To compile a dynamic library for use with the connector inventory use the following command:
+```
+cargo build --release
+```
 
+If you want to manually execute bindgen at buildtime (e.g. when changing/updating the underlying pcileech repository) then use the following command to build:
 ```
-cargo build --release --all-features
+cargo build --release --features bindgen
 ```
+
+Note: This requires `clang` (libclang) to be installed on your system.
 
 As mentioned above the `leechcore_ft601_driver_linux.so` or `FTD3XX.dll` have to be placed in the same folder the connector library is placed in.
 

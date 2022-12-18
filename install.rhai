@@ -2,7 +2,7 @@
 // builds the connector from a given path (never called by the engine directly)
 fn build_from_path(ctx, repo_path) {
 	info("Installing connector");
-	cargo("build --release --all-features", repo_path);
+	cargo("build --release", repo_path);
 	ctx.copy_cargo_plugin_artifact(repo_path, name_to_lib(ctx.crate_name()));
 
 	// TODO: download leechcore_ft601_driver_linux

@@ -19,7 +19,7 @@ jobs:
       - name: install libusb-1.0
         run: sudo apt-get install libusb-1.0-0-dev
       - name: build
-        run: cargo build --release --workspace --all-features --verbose
+        run: cargo build --release --workspace --verbose
       - uses: actions/upload-artifact@v2
         with:
           name: library-ubuntu
@@ -41,7 +41,7 @@ jobs:
         run: echo "LIBCLANG_PATH=$((gcm clang).source -replace "clang.exe")" >> $env:GITHUB_ENV
       - name: build
         shell: bash
-        run: cargo build --release --workspace --all-features --verbose
+        run: cargo build --release --workspace --verbose
       - uses: actions/upload-artifact@v2
         with:
           name: library-windows

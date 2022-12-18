@@ -1,3 +1,4 @@
+use ::std::ptr::null_mut;
 use std::ffi::c_void;
 use std::os::raw::c_char;
 use std::path::Path;
@@ -5,6 +6,7 @@ use std::ptr;
 use std::slice;
 use std::sync::{Arc, Mutex};
 
+use log::warn;
 use log::{error, info};
 
 use memflow::cglue;
@@ -63,22 +65,30 @@ unsafe impl Send for PciLeech {}
 // TODO: proper drop + free impl -> LcMemFree(pLcErrorInfo);
 #[allow(clippy::mutex_atomic)]
 impl PciLeech {
-    pub fn new(device: &str) -> Result<Self> {
-        Self::new_internal(device, None)
+    pub fn new(device: &str, auto_clear: bool) -> Result<Self> {
+        Self::new_internal(device, None, auto_clear)
     }
 
-    pub fn with_mem_map_file<P: AsRef<Path>>(device: &str, path: P) -> Result<Self> {
+    pub fn with_mem_map_file<P: AsRef<Path>>(
+        device: &str,
+        path: P,
+        auto_clear: bool,
+    ) -> Result<Self> {
         info!(
             "loading memory mappings from file: {}",
             path.as_ref().to_string_lossy()
         );
         let mem_map = MemoryMap::open(path)?;
         info!("{:?}", mem_map);
-        Self::new_internal(device, Some(mem_map))
+        Self::new_internal(device, Some(mem_map), auto_clear)
     }
 
     #[allow(clippy::mutex_atomic)]
-    fn new_internal(device: &str, mem_map: Option<MemoryMap<(Address, umem)>>) -> Result<Self> {
+    fn new_internal(
+        device: &str,
+        mem_map: Option<MemoryMap<(Address, umem)>>,
+        auto_clear: bool,
+    ) -> Result<Self> {
         // open device
         let mut conf = build_lc_config(device);
         let err = std::ptr::null_mut::<PLC_CONFIG_ERRORINFO>();
@@ -88,6 +98,50 @@ impl PciLeech {
             // TODO: handle special case of fUserInputRequest
             return Err(Error(ErrorOrigin::Connector, ErrorKind::Configuration)
                 .log_error(&format!("unable to create leechcore context: {:?}", err)));
+        }
+
+        // TODO: allow handling these errors properly
+        /*
+            typedef struct tdLC_CONFIG_ERRORINFO {
+            DWORD dwVersion;                        // must equal LC_CONFIG_ERRORINFO_VERSION
+            DWORD cbStruct;
+            DWORD _FutureUse[16];
+            BOOL fUserInputRequest;
+            DWORD cwszUserText;
+            WCHAR wszUserText[];
+        } LC_CONFIG_ERRORINFO, *PLC_CONFIG_ERRORINFO, **PPLC_CONFIG_ERRORINFO;
+        */
+
+        if auto_clear {
+            let (mut id, mut version_major, mut version_minor) = (0, 0, 0);
+            unsafe {
+                LcGetOption(handle, LC_OPT_FPGA_FPGA_ID, &mut id);
+                LcGetOption(handle, LC_OPT_FPGA_VERSION_MAJOR, &mut version_major);
+                LcGetOption(handle, LC_OPT_FPGA_VERSION_MINOR, &mut version_minor);
+            }
+            if version_major >= 4 && (version_major >= 5 || version_minor >= 7) {
+                // enable auto-clear of status register [master abort].
+                info!("Trying to enable status register auto-clear");
+                let mut data = [0x10, 0x00, 0x10, 0x00];
+                if unsafe {
+                    LcCommand(
+                        handle,
+                        LC_CMD_FPGA_CFGREGPCIE_MARKWR | 0x002,
+                        data.len() as u32,
+                        data.as_mut_ptr(),
+                        null_mut(),
+                        null_mut(),
+                    )
+                } != 0
+                {
+                    info!("Successfully enabled status register auto-clear");
+                } else {
+                    warn!("Could not enable status register auto-clear");
+                }
+            } else {
+                return Err(Error(ErrorOrigin::Connector, ErrorKind::Configuration)
+                    .log_error("Could not enable status register auto-clear due to outdated bitstream. Auto-clear is only available for bitstreams 4.7 and newer."));
+            }
         }
 
         Ok(Self {
@@ -419,6 +473,7 @@ fn validator() -> ArgsValidator {
         .arg(ArgDescriptor::new("default").description("the target device to be used by LeechCore"))
         .arg(ArgDescriptor::new("device").description("the target device to be used by LeechCore"))
         .arg(ArgDescriptor::new("memmap").description("the memory map file of the target machine"))
+        .arg(ArgDescriptor::new("auto-clear").description("tries to enable the status register auto-clear function (only available for bitstreams 4.7 and upwards)"))
 }
 
 /// Creates a new PciLeech Connector instance.
@@ -437,11 +492,11 @@ pub fn create_connector(args: &ConnectorArgs) -> Result<PciLeech> {
                     Error(ErrorOrigin::Connector, ErrorKind::ArgValidation)
                         .log_error("'device' argument is missing")
                 })?;
-
+            let auto_clear = args.get("auto-clear").is_some();
             if let Some(memmap) = args.get("memmap") {
-                PciLeech::with_mem_map_file(device, memmap)
+                PciLeech::with_mem_map_file(device, memmap, auto_clear)
             } else {
-                PciLeech::new(device)
+                PciLeech::new(device, auto_clear)
             }
         }
         Err(err) => {

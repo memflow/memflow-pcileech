@@ -1,10 +1,12 @@
-extern crate bindgen;
 extern crate cc;
 extern crate pkg_config;
 
-use std::env;
-use std::path::PathBuf;
+#[cfg(bindgen)]
+extern crate bindgen;
+
+use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::{env, fs};
 
 #[cfg(target_os = "windows")]
 fn os_define() -> &'static str {
@@ -98,14 +100,8 @@ fn build_leechcore(target: &str) {
     println!("cargo:rustc-link-lib=static=leechcore");
 }
 
-fn main() {
-    let target = env::var("TARGET").unwrap();
-    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-
-    // build leechcore
-    build_leechcore(&target);
-
-    // generate bindings
+#[cfg(bindgen)]
+fn gen_leechcore<P: AsRef<Path>>(target: &str, out_dir: P) {
     let mut builder = bindgen::builder()
         .clang_arg(format!("-D{} -D_GNU_SOURCE", os_define()))
         .header("./src/leechcore/leechcore/leechcore.h");
@@ -120,8 +116,30 @@ fn main() {
         .generate()
         .unwrap_or_else(|err| panic!("Failed to generate bindings: {:?}", err));
 
-    let bindings_path = out_dir.join("leechcore.rs");
+    let bindings_path = out_dir.as_ref().to_path_buf().join("leechcore.rs");
     bindings
         .write_to_file(&bindings_path)
         .unwrap_or_else(|_| panic!("Failed to write {}", bindings_path.display()));
+}
+
+#[cfg(not(bindgen))]
+fn gen_leechcore<P: AsRef<Path>>(_target: &str, out_dir: P) {
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+
+    let bindings_src_path = manifest_dir.join("src").join("leechcore.rs");
+    let bindings_dst_path = out_dir.as_ref().to_path_buf().join("leechcore.rs");
+
+    fs::copy(bindings_src_path, bindings_dst_path)
+        .expect("Failed to copy leechcore.rs bindings to OUT_DIR");
+}
+
+fn main() {
+    let target = env::var("TARGET").unwrap();
+    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+
+    // build leechcore
+    build_leechcore(&target);
+
+    // generate or copy bindings
+    gen_leechcore(&target, out_dir);
 }
