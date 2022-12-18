@@ -136,7 +136,8 @@ impl PciLeech {
                 {
                     info!("Successfully enabled status register auto-clear");
                 } else {
-                    warn!("Could not enable status register auto-clear");
+                    return Err(Error(ErrorOrigin::Connector, ErrorKind::Configuration)
+                        .log_error("Could not enable status register auto-clear due to outdated bitstream."));
                 }
             } else {
                 return Err(Error(ErrorOrigin::Connector, ErrorKind::Configuration)
