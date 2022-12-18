@@ -97,8 +97,9 @@ let mut conn = memflow_pcileech::create_connector(&conn_args, log::Level::Debug)
 
 The following arguments can be used when loading the connector:
 
-- `device` - the name of the pcileech device to open (e.g. FPGA) (default argument, required)
-- `memmap` - a file that contains a custom memory map in TOML format (optional)
+- `device` - The name of the pcileech device to open (e.g. FPGA) (default argument, required)
+- `memmap` - A file that contains a custom memory map in TOML format (optional)
+- `auto-clear` - Enables auto-clear of status registers in LeechCore (Auto-clear is only available for bitstreams 4.7 and newer.)
 
 The memory map file must contain a mapping table in the following format:
 
