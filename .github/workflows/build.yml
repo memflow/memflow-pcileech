@@ -8,7 +8,7 @@ env:
 jobs:
 
   build_ubuntu_x86-64_bundled:
-    name: Build for ubuntu-latest (x86-64)
+    name: Build for ubuntu-latest (x86-64) with bundled headers
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -24,7 +24,7 @@ jobs:
         run: cargo build --workspace --examples --verbose
 
   build_ubuntu_x86-64_bindgen:
-    name: Build for ubuntu-latest (x86-64)
+    name: Build for ubuntu-latest (x86-64) with generated headers
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -40,7 +40,7 @@ jobs:
         run: cargo build --workspace --features bindgen --examples --verbose
 
   build_windows_x86-64_bundled:
-    name: Build for windows-latest (x86-64)
+    name: Build for windows-latest (x86-64) with bundled headers
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v2
@@ -57,7 +57,7 @@ jobs:
         run: cargo build --workspace --examples --verbose
 
   build_windows_x86-64_bindgen:
-    name: Build for windows-latest (x86-64)
+    name: Build for windows-latest (x86-64) with generated headers
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v2

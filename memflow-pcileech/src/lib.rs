@@ -6,7 +6,6 @@ use std::ptr;
 use std::slice;
 use std::sync::{Arc, Mutex};
 
-use log::warn;
 use log::{error, info};
 
 use memflow::cglue;
