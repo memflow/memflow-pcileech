@@ -4,9 +4,9 @@ extern crate pkg_config;
 #[cfg(bindgen)]
 extern crate bindgen;
 
+use std::env;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::{env, fs};
 
 #[cfg(target_os = "windows")]
 fn os_define() -> &'static str {
@@ -68,7 +68,7 @@ fn build_leechcore(target: &str) {
             .unwrap_or_else(|err| panic!("Failed to find libusb-1.0 via pkg-config: {:?}", err));
 
         let libusb_flags = Command::new("pkg-config")
-            .args(&["libusb-1.0", "--libs", "--cflags"])
+            .args(["libusb-1.0", "--libs", "--cflags"])
             .output()
             .unwrap_or_else(|err| panic!("Failed to find libusb-1.0 via pkg-config: {:?}", err));
 
@@ -101,7 +101,7 @@ fn build_leechcore(target: &str) {
     println!("cargo:rustc-link-lib=static=leechcore");
 }
 
-#[cfg(bindgen)]
+#[cfg(feature = "bindgen")]
 fn gen_leechcore<P: AsRef<Path>>(target: &str, out_dir: P) {
     let mut builder = bindgen::builder()
         .clang_arg(format!("-D{} -D_GNU_SOURCE", os_define()))
@@ -123,14 +123,18 @@ fn gen_leechcore<P: AsRef<Path>>(target: &str, out_dir: P) {
         .unwrap_or_else(|_| panic!("Failed to write {}", bindings_path.display()));
 }
 
-#[cfg(not(bindgen))]
+#[cfg(not(feature = "bindgen"))]
 fn gen_leechcore<P: AsRef<Path>>(_target: &str, out_dir: P) {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
 
-    let bindings_src_path = manifest_dir.join("src").join("leechcore.rs");
+    #[cfg(target_os = "windows")]
+    let bindings_src_path = manifest_dir.join("src").join("leechcore_windows.rs");
+    #[cfg(target_os = "linux")]
+    let bindings_src_path = manifest_dir.join("src").join("leechcore_linux.rs");
+
     let bindings_dst_path = out_dir.as_ref().to_path_buf().join("leechcore.rs");
 
-    fs::copy(bindings_src_path, bindings_dst_path)
+    std::fs::copy(bindings_src_path, bindings_dst_path)
         .expect("Failed to copy leechcore.rs bindings to OUT_DIR");
 }
 

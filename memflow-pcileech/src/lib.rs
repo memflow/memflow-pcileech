@@ -96,7 +96,7 @@ impl PciLeech {
             // TODO: handle version error
             // TODO: handle special case of fUserInputRequest
             return Err(Error(ErrorOrigin::Connector, ErrorKind::Configuration)
-                .log_error(&format!("unable to create leechcore context: {:?}", err)));
+                .log_error(format!("unable to create leechcore context: {:?}", err)));
         }
 
         // TODO: allow handling these errors properly
