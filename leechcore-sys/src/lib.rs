@@ -7,6 +7,7 @@
 #![allow(clippy::redundant_static_lifetimes)]
 #![allow(clippy::redundant_static_lifetimes)]
 
+// will be written by build.rs
 include!(concat!(env!("OUT_DIR"), "/leechcore.rs"));
 
 #[cfg(target_os = "windows")]

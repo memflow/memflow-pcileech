@@ -13,11 +13,16 @@ git submodule update --init
 ```
 
 Install the following build tools:
-- gcc
 - clang (only required when selecting feature `bindgen`)
+- gcc (only required on linux)
 - libusb-1.0 (only required on linux)
 
-Make sure that libclang can be found by either adding it to your `PATH` or via the `LIBCLANG_PATH` environment variable.
+If you want to use `bindgen` make sure that libclang can be found by either adding it to your `PATH` or via the `LIBCLANG_PATH` environment variable.
+
+The simplest way to install clang on Windows is by using choco:
+```
+choco install llvm
+```
 
 On Windows you additionally need to supply the proprietary `FTD3XX.dll`. It can be downloaded from the [FTDI Website](https://www.ftdichip.com/Drivers/D3XX.htm) in the `Application Library (DLL)` column.
 
