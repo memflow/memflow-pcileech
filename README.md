@@ -77,24 +77,20 @@ As mentioned above the `leechcore_ft601_driver_linux.so` or `FTD3XX.dll` have to
 To use the plugin in a rust project just include it in your Cargo.toml
 
 ```toml
-memflow-pcileech = { git = "https://github.com/memflow/memflow-pcileech", branch = "master" }
+memflow-pcileech = { git = "https://github.com/memflow/memflow-pcileech", branch = "main" }
 ```
-
-Make sure to _NOT_ enable the `plugin` feature when importing multiple
-connectors in a rust project without using the memflow plugin inventory.
-This might cause duplicated exports being generated in your project.
 
 After adding the dependency to your Cargo.toml you can easily create a new Connector instance and pass it some arguments from the command line:
 
 ```rust
-let args: Vec<String> = env::args().collect();
-let conn_args = if args.len() > 1 {
-    ConnectorArgs::parse(&args[1]).expect("unable to parse arguments")
+let connector_args = if let Some(arg) = args().nth(1) {
+    arg.parse()
 } else {
-    ConnectorArgs::new()
-};
+    ":device=FPGA".parse()
+}
+.expect("unable to parse command line arguments");
 
-let mut conn = memflow_pcileech::create_connector(&conn_args, log::Level::Debug)
+let mut conn = memflow_pcileech::create_connector(&connector_args)
     .expect("unable to initialize memflow_pcileech");
 ```
 
