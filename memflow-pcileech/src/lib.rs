@@ -25,20 +25,31 @@ const BUF_LEN_ALIGN: usize = 8;
 
 cglue_impl_group!(PciLeech, ConnectorInstance<'a>, {});
 
-fn build_lc_config(device: &str) -> LC_CONFIG {
+fn build_lc_config(device: &str, remote: Option<&str>, with_mem_map: bool) -> LC_CONFIG {
+    // TODO: refactor how the static strings are handled
     let cdevice = unsafe { &*(device.as_bytes() as *const [u8] as *const [c_char]) };
     let mut adevice: [c_char; 260] = [0; 260];
     adevice[..device.len().min(260)].copy_from_slice(&cdevice[..device.len().min(260)]);
 
-    // TODO: copy device + remote
+    // set remote in case user specified the remote flag
+    let mut aremote: [c_char; 260] = [0; 260];
+    if let Some(remote) = remote {
+        let cremote = unsafe { &*(remote.as_bytes() as *const [u8] as *const [c_char]) };
+        aremote[..remote.len().min(260)].copy_from_slice(&cremote[..remote.len().min(260)]);
+    }
+
+    // set paMax to -1 if mem map is set to disable automatic scanning
+    let pa_max = if with_mem_map { u64::MAX } else { 0 };
 
     LC_CONFIG {
         dwVersion: LC_CONFIG_VERSION,
         dwPrintfVerbosity: LC_CONFIG_PRINTF_ENABLED | LC_CONFIG_PRINTF_V | LC_CONFIG_PRINTF_VV,
         szDevice: adevice,
-        szRemote: [0; 260],
+        szRemote: aremote,
         pfn_printf_opt: None, // TODO: custom info() wrapper
-        paMax: 0,
+        paMax: pa_max,
+
+        // these are set by leechcore so we dont touch them
         fVolatile: 0,
         fWritable: 0,
         fRemote: 0,
@@ -64,12 +75,13 @@ unsafe impl Send for PciLeech {}
 // TODO: proper drop + free impl -> LcMemFree(pLcErrorInfo);
 #[allow(clippy::mutex_atomic)]
 impl PciLeech {
-    pub fn new(device: &str, auto_clear: bool) -> Result<Self> {
-        Self::new_internal(device, None, auto_clear)
+    pub fn new(device: &str, remote: Option<&str>, auto_clear: bool) -> Result<Self> {
+        Self::new_internal(device, remote, None, auto_clear)
     }
 
     pub fn with_mem_map_file<P: AsRef<Path>>(
         device: &str,
+        remote: Option<&str>,
         path: P,
         auto_clear: bool,
     ) -> Result<Self> {
@@ -79,17 +91,18 @@ impl PciLeech {
         );
         let mem_map = MemoryMap::open(path)?;
         info!("{:?}", mem_map);
-        Self::new_internal(device, Some(mem_map), auto_clear)
+        Self::new_internal(device, remote, Some(mem_map), auto_clear)
     }
 
     #[allow(clippy::mutex_atomic)]
     fn new_internal(
         device: &str,
+        remote: Option<&str>,
         mem_map: Option<MemoryMap<(Address, umem)>>,
         auto_clear: bool,
     ) -> Result<Self> {
         // open device
-        let mut conf = build_lc_config(device);
+        let mut conf = build_lc_config(device, remote, mem_map.is_some());
         let err = std::ptr::null_mut::<PLC_CONFIG_ERRORINFO>();
         let handle = unsafe { LcCreateEx(&mut conf, err) };
         if handle.is_null() {
@@ -472,6 +485,7 @@ fn validator() -> ArgsValidator {
     ArgsValidator::new()
         .arg(ArgDescriptor::new("default").description("the target device to be used by LeechCore"))
         .arg(ArgDescriptor::new("device").description("the target device to be used by LeechCore"))
+        .arg(ArgDescriptor::new("remote").description("the remote target to be used by LeechCore"))
         .arg(ArgDescriptor::new("memmap").description("the memory map file of the target machine"))
         .arg(ArgDescriptor::new("auto-clear").description("tries to enable the status register auto-clear function (only available for bitstreams 4.7 and upwards)"))
 }
@@ -492,11 +506,12 @@ pub fn create_connector(args: &ConnectorArgs) -> Result<PciLeech> {
                     Error(ErrorOrigin::Connector, ErrorKind::ArgValidation)
                         .log_error("'device' argument is missing")
                 })?;
+            let remote = args.get("remote");
             let auto_clear = args.get("auto-clear").is_some();
             if let Some(memmap) = args.get("memmap") {
-                PciLeech::with_mem_map_file(device, memmap, auto_clear)
+                PciLeech::with_mem_map_file(device, remote, memmap, auto_clear)
             } else {
-                PciLeech::new(device, auto_clear)
+                PciLeech::new(device, remote, auto_clear)
             }
         }
         Err(err) => {

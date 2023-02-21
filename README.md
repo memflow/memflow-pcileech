@@ -98,7 +98,8 @@ let mut conn = memflow_pcileech::create_connector(&connector_args)
 
 The following arguments can be used when loading the connector:
 
-- `device` - The name of the pcileech device to open (e.g. FPGA) (default argument, required)
+- `device` - The name of the pcileech device to open (e.g. `FPGA`) (default argument, required)
+- `remote` - The remote connection string of the pcileech (e.g. `rpc://insecure:computername.local`) (optional)
 - `memmap` - A file that contains a custom memory map in TOML format (optional)
 - `auto-clear` - Enables auto-clear of status registers in LeechCore (Auto-clear is only available for bitstreams 4.7 and newer.)
 
