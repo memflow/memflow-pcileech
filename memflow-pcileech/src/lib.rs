@@ -109,7 +109,7 @@ impl PciLeech {
             // TODO: handle version error
             // TODO: handle special case of fUserInputRequest
             return Err(Error(ErrorOrigin::Connector, ErrorKind::Configuration)
-                .log_error(format!("unable to create leechcore context: {:?}", err)));
+                .log_error(format!("unable to create leechcore context: {err:?}")));
         }
 
         // TODO: allow handling these errors properly
@@ -536,8 +536,7 @@ More information about pcileech can be found under https://github.com/ufrisk/pci
 This connector requires access to the usb ports to access the pcileech hardware.
 
 Available arguments are:
-{}",
-        validator
+{validator}"
     )
 }
 
