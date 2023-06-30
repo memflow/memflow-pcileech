@@ -1,10 +1,6 @@
-use ::std::ptr::null_mut;
-use std::ffi::c_void;
-use std::os::raw::c_char;
 use std::path::Path;
 use std::ptr;
 use std::slice;
-use std::sync::{Arc, Mutex};
 
 use log::{error, info};
 
@@ -12,9 +8,8 @@ use memflow::cglue;
 use memflow::mem::phys_mem::*;
 use memflow::prelude::v1::*;
 
-use leechcore_sys::*;
-
-const PAGE_SIZE: usize = 0x1000usize;
+mod leechcore;
+use leechcore::{LeechCore, LeechCoreSys, MemReadScatter, MemWriteScatter, PAGE_SIZE};
 
 // the absolute minimum BUF_ALIGN is 4.
 // using 8 bytes as BUF_ALIGN here simplifies things a lot
@@ -25,48 +20,10 @@ const BUF_LEN_ALIGN: usize = 8;
 
 cglue_impl_group!(PciLeech, ConnectorInstance<'a>, {});
 
-fn build_lc_config(device: &str, remote: Option<&str>, with_mem_map: bool) -> LC_CONFIG {
-    // TODO: refactor how the static strings are handled
-    let cdevice = unsafe { &*(device.as_bytes() as *const [u8] as *const [c_char]) };
-    let mut adevice: [c_char; 260] = [0; 260];
-    adevice[..device.len().min(260)].copy_from_slice(&cdevice[..device.len().min(260)]);
-
-    // set remote in case user specified the remote flag
-    let mut aremote: [c_char; 260] = [0; 260];
-    if let Some(remote) = remote {
-        let cremote = unsafe { &*(remote.as_bytes() as *const [u8] as *const [c_char]) };
-        aremote[..remote.len().min(260)].copy_from_slice(&cremote[..remote.len().min(260)]);
-    }
-
-    // set paMax to -1 if mem map is set to disable automatic scanning
-    let pa_max = if with_mem_map { u64::MAX } else { 0 };
-
-    LC_CONFIG {
-        dwVersion: LC_CONFIG_VERSION,
-        dwPrintfVerbosity: LC_CONFIG_PRINTF_ENABLED | LC_CONFIG_PRINTF_V | LC_CONFIG_PRINTF_VV,
-        szDevice: adevice,
-        szRemote: aremote,
-        pfn_printf_opt: None, // TODO: custom info() wrapper
-        paMax: pa_max,
-
-        // these are set by leechcore so we dont touch them
-        fVolatile: 0,
-        fWritable: 0,
-        fRemote: 0,
-        fRemoteDisableCompress: 0,
-        szDeviceName: [0; 260],
-    }
-}
-
-const fn calc_num_pages(start: u64, size: u64) -> u64 {
-    ((start & (PAGE_SIZE as u64 - 1)) + size + (PAGE_SIZE as u64 - 1)) >> 12
-}
-
 #[allow(clippy::mutex_atomic)]
 #[derive(Clone)]
 pub struct PciLeech {
-    handle: Arc<Mutex<HANDLE>>,
-    conf: LC_CONFIG,
+    core: LeechCoreSys,
     mem_map: Option<MemoryMap<(Address, umem)>>,
 }
 
@@ -101,67 +58,8 @@ impl PciLeech {
         mem_map: Option<MemoryMap<(Address, umem)>>,
         auto_clear: bool,
     ) -> Result<Self> {
-        // open device
-        let mut conf = build_lc_config(device, remote, mem_map.is_some());
-        let err = std::ptr::null_mut::<PLC_CONFIG_ERRORINFO>();
-        let handle = unsafe { LcCreateEx(&mut conf, err) };
-        if handle.is_null() {
-            // TODO: handle version error
-            // TODO: handle special case of fUserInputRequest
-            return Err(Error(ErrorOrigin::Connector, ErrorKind::Configuration)
-                .log_error(format!("unable to create leechcore context: {err:?}")));
-        }
-
-        // TODO: allow handling these errors properly
-        /*
-            typedef struct tdLC_CONFIG_ERRORINFO {
-            DWORD dwVersion;                        // must equal LC_CONFIG_ERRORINFO_VERSION
-            DWORD cbStruct;
-            DWORD _FutureUse[16];
-            BOOL fUserInputRequest;
-            DWORD cwszUserText;
-            WCHAR wszUserText[];
-        } LC_CONFIG_ERRORINFO, *PLC_CONFIG_ERRORINFO, **PPLC_CONFIG_ERRORINFO;
-        */
-
-        if auto_clear {
-            let (mut id, mut version_major, mut version_minor) = (0, 0, 0);
-            unsafe {
-                LcGetOption(handle, LC_OPT_FPGA_FPGA_ID, &mut id);
-                LcGetOption(handle, LC_OPT_FPGA_VERSION_MAJOR, &mut version_major);
-                LcGetOption(handle, LC_OPT_FPGA_VERSION_MINOR, &mut version_minor);
-            }
-            if version_major >= 4 && (version_major >= 5 || version_minor >= 7) {
-                // enable auto-clear of status register [master abort].
-                info!("Trying to enable status register auto-clear");
-                let mut data = [0x10, 0x00, 0x10, 0x00];
-                if unsafe {
-                    LcCommand(
-                        handle,
-                        LC_CMD_FPGA_CFGREGPCIE_MARKWR | 0x002,
-                        data.len() as u32,
-                        data.as_mut_ptr(),
-                        null_mut(),
-                        null_mut(),
-                    )
-                } != 0
-                {
-                    info!("Successfully enabled status register auto-clear");
-                } else {
-                    return Err(Error(ErrorOrigin::Connector, ErrorKind::Configuration)
-                        .log_error("Could not enable status register auto-clear due to outdated bitstream."));
-                }
-            } else {
-                return Err(Error(ErrorOrigin::Connector, ErrorKind::Configuration)
-                    .log_error("Could not enable status register auto-clear due to outdated bitstream. Auto-clear is only available for bitstreams 4.7 and newer."));
-            }
-        }
-
-        Ok(Self {
-            handle: Arc::new(Mutex::new(handle)),
-            conf,
-            mem_map,
-        })
+        let core = LeechCoreSys::new(device, remote, mem_map.is_some(), auto_clear)?;
+        Ok(Self { core, mem_map })
     }
 }
 
@@ -193,41 +91,23 @@ impl PhysicalMemory for PciLeech {
             data.inp.map(|d| (d.0, d.1, d.2)).collect::<Vec<_>>()
         };
 
-        // get total number of pages
-        let num_pages = vec.iter().fold(0u64, |acc, read| {
-            acc + calc_num_pages(read.0.to_umem(), read.2.len() as u64)
-        });
-
         // allocate scatter buffer
-        let mut mems = std::ptr::null_mut::<PMEM_SCATTER>();
-        let result = unsafe {
-            LcAllocScatter2(
-                (num_pages * PAGE_SIZE as u64) as u32,
-                std::ptr::null_mut(),
-                num_pages as u32,
-                &mut mems as *mut PPMEM_SCATTER,
-            )
-        };
-        if result != 1 {
-            return Err(Error(ErrorOrigin::Connector, ErrorKind::InvalidMemorySize)
-                .log_error("unable to allocate scatter buffer"));
-        }
+        let mut mems = vec![];
 
         // prepare mems
         let mut gaps = Vec::new();
-        let mut i = 0usize;
         for (addr, _, out) in vec.iter_mut() {
             for (page_addr, out) in CSliceMut::from(out).page_chunks(addr.address(), PAGE_SIZE) {
-                let mem = unsafe { *mems.add(i) };
-
                 let addr_align = page_addr.to_umem() & (BUF_ALIGN - 1);
                 let len_align = out.len() & (BUF_LEN_ALIGN - 1);
 
                 if addr_align == 0 && len_align == 0 && out.len() >= BUF_MIN_LEN {
                     // properly aligned read
-                    unsafe { (*mem).qwA = page_addr.to_umem() };
-                    unsafe { (*mem).__bindgen_anon_1.pb = out.as_mut_ptr() };
-                    unsafe { (*mem).cb = out.len() as u32 };
+                    mems.push(MemReadScatter {
+                        address: page_addr.to_umem(),
+                        buffer: out.as_mut_ptr(),
+                        buffer_len: out.len(),
+                    });
                 } else {
                     // non-aligned or small read
                     let page_addr_align = page_addr.to_umem() - addr_align;
@@ -260,22 +140,17 @@ impl PhysicalMemory for PciLeech {
                         out_end: out.len() + addr_align as usize,
                     });
 
-                    unsafe { (*mem).qwA = page_addr_align };
-                    unsafe { (*mem).__bindgen_anon_1.pb = buffer_ptr };
-                    unsafe { (*mem).cb = buffer_len as u32 };
+                    mems.push(MemReadScatter {
+                        address: page_addr_align,
+                        buffer: buffer_ptr,
+                        buffer_len,
+                    });
                 }
-
-                i += 1;
             }
         }
 
         // dispatch read
-        {
-            let handle = self.handle.lock().unwrap();
-            unsafe {
-                LcReadScatter(*handle, num_pages as u32, mems);
-            }
-        }
+        self.core.read_scatter(&mems[..]).ok(); // TODO: handle error
 
         // gather all 'bogus' reads we had to custom-allocate
         if !gaps.is_empty() {
@@ -296,11 +171,6 @@ impl PhysicalMemory for PciLeech {
             }
         }
 
-        // free temporary buffers
-        unsafe {
-            LcMemFree(mems as *mut c_void);
-        };
-
         // call out sucess for everything
         // TODO: implement proper callback based on `f` in scatter
         for (_, meta_addr, out) in vec.into_iter() {
@@ -320,41 +190,23 @@ impl PhysicalMemory for PciLeech {
             data.inp.map(|d| (d.0, d.1, d.2)).collect::<Vec<_>>()
         };
 
-        // get total number of pages
-        let num_pages = vec.iter().fold(0u64, |acc, read| {
-            acc + calc_num_pages(read.0.to_umem(), read.2.len() as u64)
-        });
-
         // allocate scatter buffer
-        let mut mems = std::ptr::null_mut::<PMEM_SCATTER>();
-        let result = unsafe {
-            LcAllocScatter2(
-                (num_pages * PAGE_SIZE as u64) as u32,
-                std::ptr::null_mut(),
-                num_pages as u32,
-                &mut mems as *mut PPMEM_SCATTER,
-            )
-        };
-        if result != 1 {
-            return Err(Error(ErrorOrigin::Connector, ErrorKind::InvalidMemorySize)
-                .log_error("unable to allocate scatter buffer"));
-        }
+        let mut mems = vec![];
 
         // prepare mems
         let mut gaps = Vec::new();
-        let mut i = 0usize;
         for write in vec.iter() {
             for (page_addr, out) in write.2.page_chunks(write.0.into(), PAGE_SIZE) {
-                let mem = unsafe { *mems.add(i) };
-
                 let addr_align = page_addr.to_umem() & (BUF_ALIGN - 1);
                 let len_align = out.len() & (BUF_LEN_ALIGN - 1);
 
                 if addr_align == 0 && len_align == 0 && out.len() >= BUF_MIN_LEN {
                     // properly aligned write
-                    unsafe { (*mem).qwA = page_addr.to_umem() };
-                    unsafe { (*mem).__bindgen_anon_1.pb = out.as_ptr() as *mut u8 };
-                    unsafe { (*mem).cb = out.len() as u32 };
+                    mems.push(MemWriteScatter {
+                        address: page_addr.to_umem(),
+                        buffer: out.as_ptr(),
+                        buffer_len: out.len(),
+                    });
                 } else {
                     // non-aligned or small write
                     let page_addr_align = page_addr.to_umem() - addr_align;
@@ -391,12 +243,12 @@ impl PhysicalMemory for PciLeech {
                     });
 
                     // store pointers into pcileech struct for writing (after we dispatched a read)
-                    unsafe { (*mem).qwA = page_addr_align };
-                    unsafe { (*mem).__bindgen_anon_1.pb = buffer_ptr };
-                    unsafe { (*mem).cb = buffer_len as u32 };
+                    mems.push(MemWriteScatter {
+                        address: page_addr_align,
+                        buffer: buffer_ptr,
+                        buffer_len,
+                    });
                 }
-
-                i += 1;
             }
         }
 
@@ -428,12 +280,7 @@ impl PhysicalMemory for PciLeech {
         // opt_call(out.as_deref_mut(), CTup2(meta_addr, data));
 
         // dispatch write
-        {
-            let handle = self.handle.lock().unwrap();
-            unsafe {
-                LcWriteScatter(*handle, num_pages as u32, mems);
-            }
-        }
+        self.core.write_scatter(&mems[..]).ok(); // TODO: handle error
 
         if !gaps.is_empty() {
             for gap in gaps.iter() {
@@ -441,11 +288,6 @@ impl PhysicalMemory for PciLeech {
                 // drop buffer
             }
         }
-
-        // free temporary buffers
-        unsafe {
-            LcMemFree(mems as *mut c_void);
-        };
 
         // call out sucess for everything
         // TODO: implement proper callback based on `f` in scatter
@@ -461,14 +303,14 @@ impl PhysicalMemory for PciLeech {
             (mem_map.max_address(), mem_map.real_size())
         } else {
             (
-                (self.conf.paMax as usize - 1_usize).into(),
-                self.conf.paMax as umem,
+                (self.core.pa_max() as usize - 1_usize).into(),
+                self.core.pa_max() as umem,
             )
         };
         PhysicalMemoryMetadata {
             max_address,
             real_size,
-            readonly: self.conf.fVolatile == 0,
+            readonly: !self.core.volatile(),
             ideal_batch_size: 128,
         }
     }
