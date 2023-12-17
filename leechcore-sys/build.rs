@@ -61,9 +61,20 @@ fn build_leechcore(target: &str) {
 
     if !target.contains("windows") {
         // setup additional flags
-        cfg.flag("-fvisibility=hidden");
         cfg.flag("-fPIC");
         cfg.flag("-pthread");
+        cfg.flag("-fvisibility=hidden");
+        cfg.flag("-fstack-protector-strong");
+        cfg.flag("-D_FORTIFY_SOURCE=2");
+        cfg.flag("-O1"); // this is necessary, otherwise inline funcs in leechcore will result in undefined external symbols
+        cfg.flag("-z,noexecstack");
+        cfg.flag("-Wall");
+        cfg.flag("-Wno-multichar");
+        cfg.flag("-Wno-unused-result");
+        cfg.flag("-Wno-unused-variable");
+        cfg.flag("-Wno-unused-value");
+        cfg.flag("-Wno-pointer-to-int-cast");
+        cfg.flag("-Wno-int-to-pointer-cast");
         cfg.flag("-g");
         cfg.flag("-ldl");
 
