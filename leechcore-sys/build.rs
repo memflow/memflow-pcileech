@@ -37,6 +37,10 @@ fn build_leechcore(target: &str) {
         "memmap.c",
         "oscompatibility.c",
         "util.c",
+        "ob/ob_bytequeue.c",
+        "ob/ob_core.c",
+        "ob/ob_map.c",
+        "ob/ob_set.c",
     ];
     if target.contains("windows") {
         files.push("leechrpc_c.c");
