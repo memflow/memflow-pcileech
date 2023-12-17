@@ -16,6 +16,11 @@ jobs:
       - uses: actions/checkout@v2
         with:
           submodules: 'true'
+      - name: Install rust 1.70.0
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: 1.70.0
+          override: true
       - name: install libusb-1.0
         run: sudo apt-get install libusb-1.0-0-dev
       - name: build
@@ -32,6 +37,11 @@ jobs:
       - uses: actions/checkout@v2
         with:
           submodules: 'true'
+      - name: Install rust 1.70.0
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: 1.70.0
+          override: true
       - name: install llvm and clang
         uses: KyleMayes/install-llvm-action@v1
         with:
