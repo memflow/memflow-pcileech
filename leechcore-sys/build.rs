@@ -92,6 +92,9 @@ fn build_leechcore(target: &str) {
         println!("cargo:rustc-link-lib=setupapi");
         println!("cargo:rustc-link-lib=winusb");
         println!("cargo:rustc-link-lib=ws2_32");
+        println!("cargo:rustc-link-lib=secur32");
+        println!("cargo:rustc-link-lib=credui");
+        println!("cargo:rustc-link-lib=ole32");
     }
 
     cfg.compile("libleechcore.a");
