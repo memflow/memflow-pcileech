@@ -1,6 +1,6 @@
 [package]
 name = "memflow-pcileech"
-version = "0.2.0-beta11"
+version = "0.2.0"
 authors = ["ko1N <ko1N1337@gmail.com>"]
 edition = "2018"
 description = "qemu procfs connector for leechcore/pcileech"
@@ -16,13 +16,13 @@ categories = [ "api-bindings", "memory-management", "os" ]
 crate-type = ["lib", "cdylib"]
 
 [dependencies]
-memflow = { version = "=0.2.0-beta11", features = ["plugins", "memmapfiles"] }
-leechcore-sys = { version = "0.2.0-beta11", path = "../leechcore-sys" }
+memflow = { version = "0.2", features = ["plugins", "memmapfiles"] }
+leechcore-sys = { version = "0.2", path = "../leechcore-sys" }
 log = "0.4"
 
 [dev-dependencies]
 simplelog = "0.12"
-memflow-win32 = { version = "=0.2.0-beta11" }
+memflow-win32 = { version = "0.2" }
 
 [features]
 default = [ ]
