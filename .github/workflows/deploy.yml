@@ -43,6 +43,8 @@ jobs:
           - stable
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: 'true'
       - name: Cache cargo & target directories
         uses: Swatinem/rust-cache@v2
 

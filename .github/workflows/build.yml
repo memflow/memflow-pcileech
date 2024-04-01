@@ -19,6 +19,8 @@ jobs:
         flags: [--all-features, --no-default-features]
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: 'true'
 
       - name: install libusb-1.0
         run: sudo apt-get install libusb-1.0-0-dev
@@ -45,6 +47,8 @@ jobs:
         flags: [--all-features, --no-default-features]
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: 'true'
 
       - name: install libusb-1.0
         run: sudo apt-get install libusb-1.0-0-dev
@@ -66,6 +70,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: 'true'
       - name: install libusb-1.0
         run: sudo apt-get install libusb-1.0-0-dev
       - uses: dtolnay/rust-toolchain@stable
