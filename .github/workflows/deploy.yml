@@ -8,7 +8,7 @@ on:
 env:
   RUST_BACKTRACE: 1
   CARGO_TERM_COLOR: always
-  PLUGIN_NAME: coredump
+  PLUGIN_NAME: pcileech
 
 jobs:
   deploy:
