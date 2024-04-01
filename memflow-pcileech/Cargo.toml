@@ -19,9 +19,10 @@ crate-type = ["lib", "cdylib"]
 memflow = { version = "0.2", features = ["plugins", "memmapfiles"] }
 leechcore-sys = { version = "0.2", path = "../leechcore-sys" }
 log = "0.4"
+parking_lot = "0.12"
 
 [dev-dependencies]
-simplelog = "0.12"
+env_logger = "0.11"
 memflow-win32 = { version = "0.2" }
 
 [features]

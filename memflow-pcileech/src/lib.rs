@@ -1,11 +1,13 @@
-use ::std::ptr::null_mut;
+use parking_lot::Mutex;
 use std::ffi::c_void;
 use std::os::raw::c_char;
 use std::path::Path;
 use std::ptr;
+use std::ptr::null_mut;
 use std::slice;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
+use log::LevelFilter;
 use log::{error, info};
 
 use memflow::cglue;
@@ -26,6 +28,25 @@ const BUF_LEN_ALIGN: usize = 8;
 cglue_impl_group!(PciLeech, ConnectorInstance<'a>, {});
 
 fn build_lc_config(device: &str, remote: Option<&str>, with_mem_map: bool) -> LC_CONFIG {
+    // configure verbosity based on current level
+    let printf_verbosity = match log::max_level() {
+        LevelFilter::Off => 0,
+        LevelFilter::Error | LevelFilter::Warn => LC_CONFIG_PRINTF_ENABLED,
+        LevelFilter::Info => LC_CONFIG_PRINTF_ENABLED | LC_CONFIG_PRINTF_V,
+        LevelFilter::Debug => {
+            LC_CONFIG_PRINTF_ENABLED
+                | LC_CONFIG_PRINTF_V
+                | LC_CONFIG_PRINTF_ENABLED
+                | LC_CONFIG_PRINTF_VV
+        }
+        LevelFilter::Trace => {
+            LC_CONFIG_PRINTF_ENABLED
+                | LC_CONFIG_PRINTF_V
+                | LC_CONFIG_PRINTF_ENABLED
+                | LC_CONFIG_PRINTF_VVV
+        }
+    };
+
     // TODO: refactor how the static strings are handled
     let cdevice = unsafe { &*(device.as_bytes() as *const [u8] as *const [c_char]) };
     let mut adevice: [c_char; 260] = [0; 260];
@@ -43,7 +64,7 @@ fn build_lc_config(device: &str, remote: Option<&str>, with_mem_map: bool) -> LC
 
     LC_CONFIG {
         dwVersion: LC_CONFIG_VERSION,
-        dwPrintfVerbosity: LC_CONFIG_PRINTF_ENABLED | LC_CONFIG_PRINTF_V | LC_CONFIG_PRINTF_VV,
+        dwPrintfVerbosity: printf_verbosity,
         szDevice: adevice,
         szRemote: aremote,
         pfn_printf_opt: None, // TODO: custom info() wrapper
@@ -157,6 +178,7 @@ impl PciLeech {
             }
         }
 
+        #[allow(clippy::arc_with_non_send_sync)]
         Ok(Self {
             handle: Arc::new(Mutex::new(handle)),
             conf,
@@ -271,7 +293,7 @@ impl PhysicalMemory for PciLeech {
 
         // dispatch read
         {
-            let handle = self.handle.lock().unwrap();
+            let handle = self.handle.lock();
             unsafe {
                 LcReadScatter(*handle, num_pages as u32, mems);
             }
@@ -429,7 +451,7 @@ impl PhysicalMemory for PciLeech {
 
         // dispatch write
         {
-            let handle = self.handle.lock().unwrap();
+            let handle = self.handle.lock();
             unsafe {
                 LcWriteScatter(*handle, num_pages as u32, mems);
             }
