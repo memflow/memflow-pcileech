@@ -27,6 +27,7 @@ fn build_leechcore(target: &str) {
     let mut files = vec![
         "device_file.c",
         "device_fpga.c",
+        "device_hibr.c",
         "device_pmem.c",
         "device_tmd.c",
         "device_usb3380.c",
