@@ -1,7 +1,7 @@
 extern crate cc;
 extern crate pkg_config;
 
-#[cfg(bindgen)]
+#[cfg(feature = "bindgen")]
 extern crate bindgen;
 
 use std::env;
