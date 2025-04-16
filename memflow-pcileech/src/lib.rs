@@ -128,6 +128,7 @@ impl PciLeech {
         let pp_lc_config_error_info = &raw const p_lc_config_error_info as *mut PLC_CONFIG_ERRORINFO;
         let handle = unsafe { LcCreateEx(&mut conf, pp_lc_config_error_info) };
         if handle.is_null() {
+            error!("Unable to create leechcore context: {conf:?} ppErr: {pp_lc_config_error_info:?} pErr: {p_lc_config_error_info:?}");
             // TODO: handle version error
             // TODO: handle special case of fUserInputRequest
             let err = if p_lc_config_error_info.is_null() {
