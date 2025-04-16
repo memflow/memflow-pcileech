@@ -56,6 +56,7 @@ fn build_leechcore(target: &str) {
                 .map(|o| "src/leechcore/leechcore/".to_string() + o)
                 .collect::<Vec<_>>(),
         )
+        .include("src/leechcore/includes/")
         .flag(&format!("-D{}", os_define()))
         .flag("-D_GNU_SOURCE");
     // EXPORTED_FUNCTION= to not export any symbols
@@ -96,8 +97,8 @@ fn build_leechcore(target: &str) {
         }
     } else {
         // copy pre-compiled idl file into the leechcore folder
-        std::fs::copy("gen/leechrpc_c.c", "src/leechcore/leechcore/leechrpc_c.c").unwrap();
-        std::fs::copy("gen/leechrpc_h.h", "src/leechcore/leechcore/leechrpc_h.h").unwrap();
+        std::fs::copy("gen/leechrpc_c.c", "src/leechcore/leechcore/leechrpc_c.c").expect("Failed to copy leechrpc_c.c");
+        std::fs::copy("gen/leechrpc_h.h", "src/leechcore/leechcore/leechrpc_h.h").expect("Failed to copy leechrpc_h.h");
 
         // link against required libraries
         println!("cargo:rustc-link-lib=rpcrt4");
@@ -113,8 +114,8 @@ fn build_leechcore(target: &str) {
 
     if target.contains("windows") {
         // remove temporary generated files
-        std::fs::remove_file("src/leechcore/leechcore/leechrpc_c.c").unwrap();
-        std::fs::remove_file("src/leechcore/leechcore/leechrpc_h.h").unwrap();
+        std::fs::remove_file("src/leechcore/leechcore/leechrpc_c.c").expect("Failed to remove leechrpc_c.c");
+        std::fs::remove_file("src/leechcore/leechcore/leechrpc_h.h").expect("Failed to remove leechrpc_h.h");
     }
 
     println!("cargo:rustc-link-lib=static=leechcore");
