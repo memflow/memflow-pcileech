@@ -125,7 +125,8 @@ impl PciLeech {
         // open device
         let mut conf = build_lc_config(device, remote, mem_map.is_some());
         let p_lc_config_error_info = std::ptr::null_mut::<LC_CONFIG_ERRORINFO>();
-        let pp_lc_config_error_info = &raw const p_lc_config_error_info as *mut PLC_CONFIG_ERRORINFO;
+        let pp_lc_config_error_info =
+            &raw const p_lc_config_error_info as *mut PLC_CONFIG_ERRORINFO;
         let handle = unsafe { LcCreateEx(&mut conf, pp_lc_config_error_info) };
         if handle.is_null() {
             error!("Unable to create leechcore context: {conf:?} ppErr: {pp_lc_config_error_info:?} pErr: {p_lc_config_error_info:?}");
@@ -139,7 +140,7 @@ impl PciLeech {
             };
 
             return Err(Error(ErrorOrigin::Connector, ErrorKind::Configuration)
-                .log_error(format!("unable to create leechcore context: {err:?}", )));
+                .log_error(format!("unable to create leechcore context: {err:?}",)));
         }
 
         // TODO: allow handling these errors properly
