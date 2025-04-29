@@ -76,7 +76,7 @@ fn build() {
         println!("cargo:rustc-link-lib=secur32");
         println!("cargo:rustc-link-lib=credui");
         println!("cargo:rustc-link-lib=ole32");
-    } else if target().contains("linux"){
+    } else if target().contains("linux") {
         // setup additional flags
         cfg.flag("-fPIC");
         cfg.flag("-pthread");
@@ -146,7 +146,6 @@ fn build() {
         // cfg.flag("-arch").flag("x86_64"); // or "arm64"
         // cfg.flag("-arch").flag("arm64");
         // cfg.flag("-arch").flag(target_arch);
-
     }
 
     cfg.compile("libleechcore.a");
