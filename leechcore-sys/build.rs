@@ -133,17 +133,20 @@ fn build() {
 
         cfg.flag("-g");
         cfg.flag("-ldl");
-        //LDFLAGS += -Wl,-rpath,@loader_path
-        // LDFLAGS += -mmacosx-version-min=11.0
+        cfg.flag("-Wl,-rpath,@loader_path");
+        cfg.flag("-mmacosx-version-min=11.0");
 
+        // libary linking search
+        println!("cargo:rustc-link-search=.");
+        println!("cargo:rustc-link-lib=dylib=leechcore");
+        println!("cargo:rustc-link-lib=dylib=vmm");
 
+        // arch specification (not needed for now)
+        // let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
         // cfg.flag("-arch").flag("x86_64"); // or "arm64"
-        cfg.flag("-arch").flag("arm64");
+        // cfg.flag("-arch").flag("arm64");
+        // cfg.flag("-arch").flag(target_arch);
 
-
-        // println!("cargo:rustc-link-search=.");
-        // println!("cargo:rustc-link-lib=dylib=leechcore");
-        // println!("cargo:rustc-link-lib=dylib=vmm");
     }
 
     cfg.compile("libleechcore.a");
