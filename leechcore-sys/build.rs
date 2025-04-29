@@ -20,7 +20,7 @@ fn os_define() -> &'static str {
 
 #[cfg(target_os = "macos")]
 fn os_define() -> &'static str {
-    "LINUX"
+    "MACOS"
 }
 
 fn build() {
@@ -61,7 +61,22 @@ fn build() {
         .flag("-D_GNU_SOURCE");
     // EXPORTED_FUNCTION= to not export any symbols
 
-    if !target().contains("windows") {
+    if target().contains("windows") {
+        // copy pre-compiled idl file into the leechcore folder
+        std::fs::copy("gen/leechrpc_c.c", "src/leechcore/leechcore/leechrpc_c.c")
+            .expect("Failed to copy leechrpc_c.c");
+        std::fs::copy("gen/leechrpc_h.h", "src/leechcore/leechcore/leechrpc_h.h")
+            .expect("Failed to copy leechrpc_h.h");
+
+        // link against required libraries
+        println!("cargo:rustc-link-lib=rpcrt4");
+        println!("cargo:rustc-link-lib=setupapi");
+        println!("cargo:rustc-link-lib=winusb");
+        println!("cargo:rustc-link-lib=ws2_32");
+        println!("cargo:rustc-link-lib=secur32");
+        println!("cargo:rustc-link-lib=credui");
+        println!("cargo:rustc-link-lib=ole32");
+    } else if target().contains("linux"){
         // setup additional flags
         cfg.flag("-fPIC");
         cfg.flag("-pthread");
@@ -95,21 +110,40 @@ fn build() {
         {
             cfg.flag(flag);
         }
-    } else {
-        // copy pre-compiled idl file into the leechcore folder
-        std::fs::copy("gen/leechrpc_c.c", "src/leechcore/leechcore/leechrpc_c.c")
-            .expect("Failed to copy leechrpc_c.c");
-        std::fs::copy("gen/leechrpc_h.h", "src/leechcore/leechcore/leechrpc_h.h")
-            .expect("Failed to copy leechrpc_h.h");
+    } else if target().contains("macos") {
+        cfg.flag("-D_FILE_OFFSET_BITS=64");
+        cfg.flag("-fPIC");
+        cfg.flag("-pthread");
+        cfg.flag("-fvisibility=hidden");
+        cfg.flag("-fstack-protector-strong");
+        cfg.flag("-D_FORTIFY_SOURCE=2");
+        cfg.flag("-O1"); // this is necessary, otherwise inline funcs in leechcore will result in undefined external symbols
+        cfg.flag("-Wall");
+        cfg.flag("-Wno-multichar");
+        cfg.flag("-Wno-unused-result");
+        cfg.flag("-Wno-unused-variable");
+        cfg.flag("-Wno-unused-value");
+        cfg.flag("-Wno-pointer-to-int-cast");
+        cfg.flag("-Wno-int-to-pointer-cast");
 
-        // link against required libraries
-        println!("cargo:rustc-link-lib=rpcrt4");
-        println!("cargo:rustc-link-lib=setupapi");
-        println!("cargo:rustc-link-lib=winusb");
-        println!("cargo:rustc-link-lib=ws2_32");
-        println!("cargo:rustc-link-lib=secur32");
-        println!("cargo:rustc-link-lib=credui");
-        println!("cargo:rustc-link-lib=ole32");
+        if cfg!(debug_assertions) {
+            cfg.flag("-O0");
+            cfg.flag("-fsanitize=address");
+        }
+
+        cfg.flag("-g");
+        cfg.flag("-ldl");
+        //LDFLAGS += -Wl,-rpath,@loader_path
+        // LDFLAGS += -mmacosx-version-min=11.0
+
+
+        // cfg.flag("-arch").flag("x86_64"); // or "arm64"
+        cfg.flag("-arch").flag("arm64");
+
+
+        // println!("cargo:rustc-link-search=.");
+        // println!("cargo:rustc-link-lib=dylib=leechcore");
+        // println!("cargo:rustc-link-lib=dylib=vmm");
     }
 
     cfg.compile("libleechcore.a");
