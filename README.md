@@ -103,6 +103,8 @@ The following arguments can be used when loading the connector:
 - `memmap` - A file that contains a custom memory map in TOML format (optional)
 - `auto-clear` - Enables auto-clear of status registers in LeechCore (Auto-clear is only available for bitstreams 4.7 and newer.)
 
+Passing arguments which use the `:` character to pcileech itself requires quotes to escape them. here is an example of using the "driver" mode on pcileech as well as using a memory map file: `:device="fpga://driver=1":memmap="memmap.toml"`. Pcileech takes device arguments by appending `://` to the device name, followed by comma-separated device arguments.
+
 The memory map file must contain a mapping table in the following format:
 
 ```toml
