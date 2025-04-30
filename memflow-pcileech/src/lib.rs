@@ -16,6 +16,9 @@ use memflow::prelude::v1::*;
 
 use leechcore_sys::*;
 
+#[cfg(feature = "download_drivers")]
+mod download;
+
 const PAGE_SIZE: usize = 0x1000usize;
 
 // the absolute minimum BUF_ALIGN is 4.
@@ -122,6 +125,10 @@ impl PciLeech {
         mem_map: Option<MemoryMap<(Address, umem)>>,
         auto_clear: bool,
     ) -> Result<Self> {
+        // ensure ftdi driver exists
+        #[cfg(feature = "download_drivers")]
+        download::download_driver().unwrap();
+
         // open device
         let mut conf = build_lc_config(device, remote, mem_map.is_some());
         let p_lc_config_error_info = std::ptr::null_mut::<LC_CONFIG_ERRORINFO>();

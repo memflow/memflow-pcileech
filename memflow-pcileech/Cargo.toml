@@ -21,13 +21,20 @@ leechcore-sys = { version = "0.2", path = "../leechcore-sys" }
 log = "0.4"
 parking_lot = "0.12"
 
+ureq = { version = "2.10", optional = true }
+zip = { version = "2.6", optional = true }
+indicatif = { version = "0.17", optional = true }
+progress-streams = { version = "1.1", optional = true }
+
 [dev-dependencies]
 env_logger = "0.11"
 memflow-win32 = { version = "0.2" }
 
 [features]
-default = [ ]
-bindgen = [ "leechcore-sys/bindgen" ]
+default = ["download_drivers", "download_progress"]
+bindgen = ["leechcore-sys/bindgen"]
+download_drivers = ["ureq", "zip"]
+download_progress = ["indicatif", "progress-streams"]
 
 [[example]]
 name = "read_phys"
