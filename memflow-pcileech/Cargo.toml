@@ -23,6 +23,7 @@ parking_lot = "0.12"
 
 ureq = { version = "2.10", optional = true }
 zip = { version = "2.6", optional = true }
+sha2 = { version = "0.10", optional = true }
 indicatif = { version = "0.17", optional = true }
 progress-streams = { version = "1.1", optional = true }
 
@@ -33,7 +34,7 @@ memflow-win32 = { version = "0.2" }
 [features]
 default = ["download_drivers", "download_progress"]
 bindgen = ["leechcore-sys/bindgen"]
-download_drivers = ["ureq", "zip"]
+download_drivers = ["ureq", "zip", "sha2"]
 download_progress = ["indicatif", "progress-streams"]
 
 [[example]]

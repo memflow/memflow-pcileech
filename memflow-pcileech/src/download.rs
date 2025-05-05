@@ -1,4 +1,5 @@
-use log::info;
+use log::{error, info, warn};
+use sha2::{Digest, Sha256};
 use std::fs::File;
 use std::io::{self, Cursor, Read, Write};
 use std::path::PathBuf;
@@ -13,6 +14,44 @@ use {
     std::sync::atomic::{AtomicBool, AtomicUsize, Ordering},
     std::sync::Arc,
 };
+
+// Windows
+#[cfg(all(target_os = "windows", target_arch = "x86"))]
+pub fn download_url() -> (&'static str, &'static str, &'static str) {
+    (
+        "https://ftdichip.com/wp-content/uploads/2025/03/Winusb_D3XX_Release_1.4.0.0.zip",
+        "WU_FTD3XXLib/Lib/Dynamic/x86/FTD3XXWU.dll",
+        "xxx",
+    )
+}
+#[cfg(all(target_os = "windows", target_arch = "x86_64"))]
+pub fn download_url() -> (&'static str, &'static str, &'static str) {
+    (
+        "https://ftdichip.com/wp-content/uploads/2025/03/Winusb_D3XX_Release_1.4.0.0.zip",
+        "WU_FTD3XXLib/Lib/Dynamic/x64/FTD3XXWU.dll",
+        "f0315b7f20ebdf1303082b63d6dd598ff7d98d3b738fc7444d000a4b64913666",
+    )
+}
+#[cfg(all(target_os = "windows", target_arch = "aarch64"))]
+pub fn download_url() -> (&'static str, &'static str, &'static str) {
+    (
+        "https://ftdichip.com/wp-content/uploads/2025/03/Winusb_D3XX_Release_1.4.0.0.zip",
+        "WU_FTD3XXLib/Lib/Dynamic/ARM64/FTD3XXWU.dll",
+        "xxx",
+    )
+}
+
+// TODO: linux
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+pub fn download_url() -> (&'static str, &'static str, &'static str) {
+    (
+        "https://ftdichip.com/wp-content/uploads/2023/11/FTD3XXLibrary_v1.3.0.8.zip",
+        "FTD3XXLibrary_v1.3.0.8/x64/DLL/FTD3XX.dll",
+        "1234",
+    )
+}
+
+// TODO: mac
 
 fn download_file(url: &str) -> Result<Vec<u8>> {
     info!("downloading file from {}", url);
@@ -79,25 +118,8 @@ fn read_to_end<T: Read>(reader: &mut T, _len: usize) -> Result<Vec<u8>> {
     Ok(buffer)
 }
 
-#[cfg(all(target_os = "windows", target_arch = "x86_64"))]
-pub fn download_url() -> (&'static str, &'static str) {
-    (
-        "https://ftdichip.com/wp-content/uploads/2023/11/FTD3XXLibrary_v1.3.0.8.zip",
-        "FTD3XXLibrary_v1.3.0.8/x64/DLL/FTD3XX.dll",
-    )
-}
-
-// TODO:
-#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-pub fn download_url() -> (&'static str, &'static str) {
-    (
-        "https://ftdichip.com/wp-content/uploads/2023/11/FTD3XXLibrary_v1.3.0.8.zip",
-        "FTD3XXLibrary_v1.3.0.8/x64/DLL/FTD3XX.dll",
-    )
-}
-
 pub fn download_driver() -> Result<()> {
-    let (url, file_to_extract) = download_url();
+    let (url, file_to_extract, file_checksum) = download_url();
 
     let file_to_extract_path: PathBuf = file_to_extract.parse().unwrap();
     let file_to_extract_name = file_to_extract_path.file_name().unwrap().to_str().unwrap();
@@ -131,7 +153,6 @@ pub fn download_driver() -> Result<()> {
         let mut file = archive
             .by_index(i)
             .map_err(|_| Error(ErrorOrigin::Connector, ErrorKind::UnableToReadFile))?;
-        println!("file.name: {}", file.name());
         if file.name() == file_to_extract {
             info!("Found file to extract: {}", file_to_extract);
 
@@ -143,8 +164,22 @@ pub fn download_driver() -> Result<()> {
                 output_path.display()
             ));
 
+            let mut file_contents = Vec::new();
+            file.read_to_end(&mut file_contents).unwrap();
+            let hash = format!("{:x}", Sha256::digest(&file_contents));
+            if hash != file_checksum {
+                error!(
+                    "invalid checksum of extracted {} (found {})",
+                    file_to_extract_name, hash
+                );
+                return Ok(());
+            }
+
             // Copy the file content
-            io::copy(&mut file, &mut output_file).expect("Failed to write extracted file");
+            output_file
+                .write_all(&file_contents)
+                .expect("Failed to write extracted file");
+            output_file.flush().unwrap();
 
             info!(
                 "Successfully extracted {} to {}",
