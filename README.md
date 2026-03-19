@@ -38,10 +38,11 @@ To run the example simply execute:
 cargo run --example read_phys --release -- FPGA
 ```
 
-On Linux the example binary will be ran with `sudo -E` to elevate privileges.
+On Linux and MacOS the example binary will be ran with `sudo -E` to elevate privileges.
 
 Since the invoked binary is placed in the `target/release/examples` or `/target/debug/examples` folder the `leechcore_ft601_driver_linux.so` has to be placed in the corresponding folder.
 On Windows the `FTD3XX.dll` has to be placed in the corresponding examples folder.
+On MacOs the `leechcore_ft601_driver_macos.dylib` has to be placed in the corresponding examples folder.
 
 Alternatively you can also run memflow examples by running them directly from the [memflow](https://github.com/memflow/memflow) repository directory:
 ```

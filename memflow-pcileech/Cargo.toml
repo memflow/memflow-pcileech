@@ -24,6 +24,7 @@ parking_lot = "0.12"
 [dev-dependencies]
 env_logger = "0.11"
 memflow-win32 = { version = "0.2" }
+memflow-linux = { git = "https://github.com/forensicxlab/memflow-linux", branch = "master"}
 
 [features]
 default = [ ]
@@ -36,6 +37,10 @@ path = "examples/read_phys.rs"
 [[example]]
 name = "ps_win32"
 path = "examples/ps_win32.rs"
+
+[[example]]
+name = "ps_linux"
+path = "examples/ps_linux.rs"
 
 [[example]]
 name = "ps_inventory"
