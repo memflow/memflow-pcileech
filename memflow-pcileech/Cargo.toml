@@ -16,7 +16,7 @@ categories = [ "api-bindings", "memory-management", "os" ]
 crate-type = ["lib", "cdylib"]
 
 [dependencies]
-memflow = { version = "0.2", features = ["plugins", "memmapfiles"] }
+memflow = { git = "https://github.com/forensicxlab/memflow", branch = "main", features = ["plugins", "memmapfiles"] }
 leechcore-sys = { version = "0.2", path = "../leechcore-sys" }
 log = "0.4"
 parking_lot = "0.12"
