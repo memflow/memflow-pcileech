@@ -1079,7 +1079,7 @@ dependencies = [
 [[package]]
 name = "memflow-linux"
 version = "0.2.0"
-source = "git+https://github.com/forensicxlab/memflow-linux?branch=master#36de705d359a802ecfed609539140d0424d244f6"
+source = "git+https://github.com/forensicxlab/memflow-linux?branch=master#17016de60b53b64d71831953773fe5374842989a"
 dependencies = [
  "iced-x86",
  "log",
