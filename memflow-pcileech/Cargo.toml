@@ -16,7 +16,7 @@ categories = [ "api-bindings", "memory-management", "os" ]
 crate-type = ["lib", "cdylib"]
 
 [dependencies]
-memflow = { git = "https://github.com/forensicxlab/memflow", branch = "main", features = ["plugins", "memmapfiles"] }
+memflow = { version = "0.2.4", git = "https://github.com/forensicxlab/memflow", branch = "main", features = ["plugins", "memmapfiles"] }
 leechcore-sys = { version = "0.2", path = "../leechcore-sys" }
 log = "0.4"
 parking_lot = "0.12"
@@ -24,7 +24,6 @@ parking_lot = "0.12"
 [dev-dependencies]
 env_logger = "0.11"
 memflow-win32 = { version = "0.2" }
-memflow-linux = { git = "https://github.com/forensicxlab/memflow-linux", branch = "master"}
 
 [features]
 default = [ ]
@@ -45,3 +44,8 @@ path = "examples/ps_linux.rs"
 [[example]]
 name = "ps_inventory"
 path = "examples/ps_inventory.rs"
+
+
+[[example]]
+name = "discover_kernel"
+path = "examples/discover_kernel.rs"

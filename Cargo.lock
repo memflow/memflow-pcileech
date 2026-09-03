@@ -646,15 +646,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "iced-x86"
-version = "1.21.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7c447cff8c7f384a7d4f741cfcff32f75f3ad02b406432e8d6c878d56b1edf6b"
-dependencies = [
- "lazy_static",
-]
-
-[[package]]
 name = "icu_collections"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1077,19 +1068,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "memflow-linux"
-version = "0.2.0"
-source = "git+https://github.com/forensicxlab/memflow-linux?branch=master#17016de60b53b64d71831953773fe5374842989a"
-dependencies = [
- "iced-x86",
- "log",
- "memchr",
- "memflow 0.2.4 (git+https://github.com/forensicxlab/memflow?branch=main)",
- "serde",
- "toml 0.8.2",
-]
-
-[[package]]
 name = "memflow-pcileech"
 version = "0.2.0"
 dependencies = [
@@ -1097,7 +1075,6 @@ dependencies = [
  "leechcore-sys",
  "log",
  "memflow 0.2.4 (git+https://github.com/forensicxlab/memflow?branch=main)",
- "memflow-linux",
  "memflow-win32",
  "parking_lot 0.12.3",
 ]
