@@ -31,7 +31,7 @@ fn main() {
     }
     .expect("unable to parse command line arguments");
 
-    let inventory = Inventory::scan();
+    let mut inventory = Inventory::scan();
     let connector = inventory
         .create_connector("pcileech", None, Some(&connector_args))
         .expect("unable to create pcileech connector");
