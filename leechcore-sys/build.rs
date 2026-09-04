@@ -25,8 +25,11 @@ fn os_define() -> &'static str {
 
 fn build() {
     let mut files = vec![
+        "charutil.c",
         "device_file.c",
         "device_fpga.c",
+        "device_fpga_read_policy.c",
+        "device_fpga_session.c",
         "device_hibr.c",
         "device_pmem.c",
         "device_tmd.c",

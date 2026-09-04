@@ -23,7 +23,8 @@ parking_lot = "0.12"
 
 [dev-dependencies]
 env_logger = "0.11"
-memflow-win32 = { version = "0.2" }
+memflow-linux = { version = "0.2.0", git = "https://github.com/forensicxlab/memflow-linux", branch = "master" }
+memflow-win32 = { version = "0.2", git = "https://github.com/forensicxlab/memflow-win32", branch = "main" }
 
 [features]
 default = [ ]
