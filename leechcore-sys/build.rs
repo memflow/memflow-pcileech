@@ -23,6 +23,45 @@ fn os_define() -> &'static str {
     "MACOS"
 }
 
+fn windows_rpc_bindings() -> PathBuf {
+    if env::var("CARGO_CFG_TARGET_ARCH").as_deref() != Ok("aarch64") {
+        return PathBuf::from("gen");
+    }
+
+    // The checked-in RPC client was generated for AMD64 and is excluded by its
+    // _M_AMD64 guard on ARM64. Generate the native client from the same IDL so
+    // Windows ARM64 retains RPC/SMB support as well as local/file connectors.
+    let destination = out_dir();
+    let idl = "src/leechcore/leechcore/leechrpc.idl";
+    println!("cargo:rerun-if-changed={idl}");
+    let status = Command::new("midl.exe")
+        .args([
+            "/nologo",
+            "/env",
+            "arm64",
+            "/client",
+            "stub",
+            "/server",
+            "none",
+            "/h",
+            "leechrpc_h.h",
+            "/cstub",
+            "leechrpc_c.c",
+            "/out",
+        ])
+        .arg(&destination)
+        .arg(idl)
+        .status()
+        .expect(
+            "Windows ARM64 requires the Windows SDK MIDL compiler in the developer environment",
+        );
+    assert!(
+        status.success(),
+        "MIDL failed to generate Windows ARM64 RPC bindings"
+    );
+    destination
+}
+
 fn build() {
     let mut files = vec![
         "charutil.c",
@@ -65,11 +104,17 @@ fn build() {
     // EXPORTED_FUNCTION= to not export any symbols
 
     if target().contains("windows") {
-        // copy pre-compiled idl file into the leechcore folder
-        std::fs::copy("gen/leechrpc_c.c", "src/leechcore/leechcore/leechrpc_c.c")
-            .expect("Failed to copy leechrpc_c.c");
-        std::fs::copy("gen/leechrpc_h.h", "src/leechcore/leechcore/leechrpc_h.h")
-            .expect("Failed to copy leechrpc_h.h");
+        let rpc = windows_rpc_bindings();
+        std::fs::copy(
+            rpc.join("leechrpc_c.c"),
+            "src/leechcore/leechcore/leechrpc_c.c",
+        )
+        .expect("Failed to copy leechrpc_c.c");
+        std::fs::copy(
+            rpc.join("leechrpc_h.h"),
+            "src/leechcore/leechcore/leechrpc_h.h",
+        )
+        .expect("Failed to copy leechrpc_h.h");
 
         // link against required libraries
         println!("cargo:rustc-link-lib=rpcrt4");

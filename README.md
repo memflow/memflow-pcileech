@@ -16,6 +16,9 @@ Install the following build tools:
 - clang (only required when selecting feature `bindgen`)
 - gcc (only required on linux)
 - libusb-1.0 (only required on linux)
+- Windows ARM64 builds require the Windows SDK MIDL compiler in the MSVC
+  developer environment. The native RPC client is generated from the pinned
+  LeechCore IDL; x64 builds use the checked-in AMD64 client.
 
 If you want to use `bindgen` make sure that libclang can be found by either adding it to your `PATH` or via the `LIBCLANG_PATH` environment variable.
 
