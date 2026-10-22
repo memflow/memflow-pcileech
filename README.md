@@ -16,6 +16,9 @@ Install the following build tools:
 - clang (only required when selecting feature `bindgen`)
 - gcc (only required on linux)
 - libusb-1.0 (only required on linux)
+- Windows ARM64 builds require the Windows SDK MIDL compiler in the MSVC
+  developer environment. The native RPC client is generated from the pinned
+  LeechCore IDL; x64 builds use the checked-in AMD64 client.
 
 If you want to use `bindgen` make sure that libclang can be found by either adding it to your `PATH` or via the `LIBCLANG_PATH` environment variable.
 
@@ -38,10 +41,11 @@ To run the example simply execute:
 cargo run --example read_phys --release -- FPGA
 ```
 
-On Linux the example binary will be ran with `sudo -E` to elevate privileges.
+On Linux and MacOS the example binary will be ran with `sudo -E` to elevate privileges.
 
 Since the invoked binary is placed in the `target/release/examples` or `/target/debug/examples` folder the `leechcore_ft601_driver_linux.so` has to be placed in the corresponding folder.
 On Windows the `FTD3XX.dll` has to be placed in the corresponding examples folder.
+On MacOs the `leechcore_ft601_driver_macos.dylib` has to be placed in the corresponding examples folder.
 
 Alternatively you can also run memflow examples by running them directly from the [memflow](https://github.com/memflow/memflow) repository directory:
 ```
